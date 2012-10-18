@@ -34,7 +34,7 @@ class Node(MutableMapping):
     def toxml(self, indent=""):
         xml = indent + "<" + self.name
         for name in sorted(self.attributes.keys()):
-            xml += " " + name + "=\"" + self.attributes[name] + "\""
+            xml += " " + str(name) + "=\"" + str(self.attributes[name]) + "\""
         xml += ">"
 
         if self.data:

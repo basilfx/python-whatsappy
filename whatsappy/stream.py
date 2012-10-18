@@ -216,8 +216,8 @@ class Writer:
     def attributes(self, attributes):
         buf = ""
         for key, value in attributes.iteritems():
-            buf += self.string(key)
-            buf += self.string(value)
+            buf += self.string(str(key))
+            buf += self.string(str(value))
         return buf
 
     def list_start(self, length):
