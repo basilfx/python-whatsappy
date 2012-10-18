@@ -39,8 +39,8 @@ else:
 
     # TODO: How do we get extra args from the commandline here?
     if args.command == "lastseen":
-        # TODO
+        pass # TODO
     elif args.command == "message":
-        # TODO
+        pass # TODO
     elif args.command == "query":
-        # TODO
+        pass # TODO
