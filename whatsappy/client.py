@@ -1,6 +1,8 @@
 import sys
 
 import socket
+from select import select
+from time import time
 from hashlib import md5
 
 from twisted.words.protocols.jabber.sasl_mechanisms import DigestMD5
@@ -18,9 +20,21 @@ def hash_secret(secret):
 
     return md5(data).hexdigest()
 
+class Callback:
+    def __init__(self, name, callback):
+        self.name = name
+        self.callback = callback
+        self.called = 0
+        self.result = None
+
+    def apply(self, node):
+        self.result = self.callback(node)
+        self.called += 1
+
 class Client:
     HOST = "bin-short.whatsapp.net"
     PORT = 5222
+    TIMEOUT = 0.1 # s
 
     SERVER = "s.whatsapp.net"
     REALM = "s.whatsapp.net"
@@ -44,6 +58,10 @@ class Client:
         self.reader = Reader()
         self.writer = Writer()
 
+        self.messages = []
+
+        self.callbacks = {}
+
     def _connect(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((self.host, self.port))
@@ -58,10 +76,12 @@ class Client:
         self.socket.sendall(buf)
 
     def _read(self, nbytes = 4096):
-        buf = self.socket.recv(nbytes)
-        if self.debug: self.dump("    <", buf)
-
-        if buf:
+        # See if there's data available to read
+        r, w, x, = select([self.socket], [], [], self.TIMEOUT)
+        if self.socket in r:
+            # receive any available data, update Reader's buffer
+            buf = self.socket.recv(nbytes)
+            if self.debug: self.dump("    <", buf)
             self.reader.data(buf)
 
         nodes = []
@@ -115,12 +135,19 @@ class Client:
         self._incoming()
 
     def _received(self, node):
-        pass
+        request = node.child("request")
+        if request is None or request["xmlns"] != "urn:xmpp:receipts":
+            return
+
+        message = Node("message", to=node["from"], id=node["id"], type="chat")
+        message.add(Node("received", xmlns="urn:xmpp:receipts"))
+
+        self._write(message)
 
     def _iq(self, node):
         iq = node.children[0]
         if node["type"] == "get" and iq.name == "ping":
-            self._pong(node["id"])
+            self._write(Node("iq", to=self.SERVER, id=node["id"], type="result"))
         elif node["type"] == "result" and iq.name == "query":
             self.messages.append(node)
         elif self.debug:
@@ -133,10 +160,6 @@ class Client:
         for node in nodes:
             if node.name == "challenge":
                 self._challenge(node)
-            elif node.name == "success":
-                if self.debug:
-                    print >>sys.stderr, "Logged In!"
-                self.account_info = node.attributes
             elif node.name == "message":
                 self.messages.append(node)
                 self._received(node)
@@ -144,11 +167,60 @@ class Client:
                 self._iq(node)
             elif node.name == "stream:error":
                 raise Exception(node.children[0].name)
-            elif node.name in ("start", "stream:features"):
-                pass # Not interesting
-            elif self.debug:
-                print >>sys.stderr, "Ignorning message"
-                print >>sys.stderr, node.toxml(indent="  ") + "\n"
+
+            if node.name in self.callbacks:
+                for record in self.callbacks[node.name]:
+                    record.apply(node)
+
+            #elif node.name in ("start", "stream:features"):
+            #    pass # Not interesting
+            #elif self.debug:
+            #    print >>sys.stderr, "Ignorning message"
+            #    print >>sys.stderr, node.toxml(indent="  ") + "\n"
+
+    def _msgid(self):
+        return "msg-%d" % (time() * 1000)
+
+    def register_callback(self, name, callback):
+        record = Callback(name, callback)
+
+        if name not in self.callbacks:
+            self.callbacks[name] = []
+
+        self.callbacks[name].append(record)
+        return record
+
+    def unregister_callback(self, record):
+        self.callbacks[record.name].remove(record)
+
+    def wait_for_callback(self, record):
+        while not record.called:
+            self._incoming()
+
+        self.unregister_callback(record)
+
+        if isinstance(record.result, Exception):
+            raise record.result
+
+        return record.result
+
+    def wait_for_any_callback(self, records):
+        called = None
+        while called is None:
+            for record in records:
+                if record.called:
+                    called = record
+                    break
+            else:
+                self._incoming()
+
+        for record in records:
+            self.unregister_callback(record)
+
+        if isinstance(called.result, Exception):
+            raise called.result
+
+        return called.result
 
     def login(self):
         assert self.socket is None
@@ -166,4 +238,77 @@ class Client:
         auth = Node("auth", xmlns="urn:ietf:params:xml:ns:xmpp-sasl", mechanism="DIGEST-MD5-1")
         self._write(auth)
 
-        self._incoming()
+        def on_success(node):
+            if self.debug:
+                print >>sys.stderr, "Logged In!"
+            self.account_info = node.attributes
+
+            presence = Node("presence")
+            presence["name"] = self.nickname
+            self._write(presence)
+
+        callback = self.register_callback("success", on_success)
+        self.wait_for_callback(callback)
+
+    def last_seen(self, number):
+        msgid = self._msgid()
+
+        iq = Node("iq", type="get", id=msgid)
+        iq["from"] = self.number + "@" + self.SERVER
+        iq["to"] = number + "@" + self.SERVER
+        iq.add(Node("query", xmlns="jabber:iq:last"))
+
+        self._write(iq)
+
+        def on_iq(node):
+            if node["id"] != msgid:
+                return
+            if node["type"] == "error":
+                return Exception(node.child("error").children[0].name)
+            return int(node.child("query")["seconds"])
+
+        callback = self.register_callback("iq", on_iq)
+        return self.wait_for_callback(callback)
+
+    def _message(self, number, node):
+        msgid = self._msgid()
+
+        message = Node("message", type="chat", id=msgid)
+        message["to"] = number + "@" + self.SERVER
+
+        x = Node("x", xmlns="jabber:x:event")
+        x.add(Node("server"))
+
+        message.add(x)
+        message.add(body)
+
+        return msgid, message
+
+    def message(self, number, text):
+        msgid, message = self._message(number, Node("body", data=text))
+        self._write(message)
+
+    def image(self, number, url, basename, size, thumbnail = None):
+        """
+        Send an image to a contact.
+        Url should be publicly accessible
+        Basename does not have to match Url
+        Size is the size of the image, in bytes
+        Thumbnail should be a base64 encoded JPEG image, if proviced.
+        """
+        # TODO: Where does WhatsApp upload images?
+        # TODO: Are PNG thumbnails supported?
+
+        media = Node("media", xmlns="urn:xmpp:whatsapp:mms", type="image",
+                     url=url, file=basename, size=size, data=thumbnail)
+        msgid, message = self._message(number, media)
+        self._write(message)
+
+    def location(self, number, latitude, longitude):
+        "Send a location update to a contact"
+        # XXX: PHP WhatsApi does not include the jabber:x:event
+
+        media = Node("media", xmlns="urn:xmpp:whatsapp:mms", type="location",
+                     latitude=latitude, longitude=longitude)
+        msgid, message = self._message(number, media)
+        self._write(message)
