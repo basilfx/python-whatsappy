@@ -31,6 +31,12 @@ class Node(MutableMapping):
     def add(self, child):
         self.children.append(child)
 
+    def child(self, name):
+        for child in self.children:
+            if child.name == name:
+                return child
+        return None
+
     def toxml(self, indent=""):
         xml = indent + "<" + self.name
         for name in sorted(self.attributes.keys()):
