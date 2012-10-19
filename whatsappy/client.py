@@ -280,7 +280,7 @@ class Client:
         x.add(Node("server"))
 
         message.add(x)
-        message.add(body)
+        message.add(node)
 
         return msgid, message
 
