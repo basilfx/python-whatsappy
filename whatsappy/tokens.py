@@ -44,14 +44,14 @@ TOKENS = [
 ]
 
 def str2tok(string):
-    "Convert a string to a token. Returns None if the string is not a token."
+    """Convert a string to a token. Returns None if the string is not a token."""
 
     return TOKENS.index(string) if string in TOKENS else None
 
 def tok2str(index):
-    "Convert a token to a string. Returns None if the token is not valid."
+    """Convert a token to a string. Returns None if the token is not valid."""
 
-    return TOKENS[index] if index >= 0 and index < len(TOKENS) else None
+    return TOKENS[index] if 0 <= index < len(TOKENS) else None
 
 if __name__ == "__main__":
     import sys

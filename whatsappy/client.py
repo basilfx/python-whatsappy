@@ -59,6 +59,7 @@ class Client:
         self.writer = Writer()
 
         self.messages = []
+        self.account_info = None
 
         self.callbacks = {}
 
@@ -109,7 +110,7 @@ class Client:
                 if i + j < length:
                     b = ord(bytes[i + j])
                     hexstr  += "%02x " % b
-                    bytestr += bytes[i + j] if b >= 0x20 and b < 0x7F else "."
+                    bytestr += bytes[i + j] if 0x20 <= b < 0x7F else "."
                 else:
                     hexstr  += "   "
 
@@ -305,8 +306,7 @@ class Client:
         self._write(message)
 
     def location(self, number, latitude, longitude):
-        "Send a location update to a contact"
-        # XXX: PHP WhatsApi does not include the jabber:x:event
+        """Send a location update to a contact"""
 
         media = Node("media", xmlns="urn:xmpp:whatsapp:mms", type="location",
                      latitude=latitude, longitude=longitude)
