@@ -233,6 +233,7 @@ class Client:
 
         features = Node("stream:features")
         features.add(Node("receipt_acks"))
+        features.add(Node("groups"))
         self._write(features)
 
         auth = Node("auth", xmlns="urn:ietf:params:xml:ns:xmpp-sasl", mechanism="DIGEST-MD5-1")
@@ -270,11 +271,11 @@ class Client:
         callback = self.register_callback("iq", on_iq)
         return self.wait_for_callback(callback)
 
-    def _message(self, number, node):
+    def _message(self, to, node, group=False):
         msgid = self._msgid()
 
         message = Node("message", type="chat", id=msgid)
-        message["to"] = number + "@" + self.SERVER
+        message["to"] = to + "@" + (self.GROUPHOST if group else self.SERVER)
 
         x = Node("x", xmlns="jabber:x:event")
         x.add(Node("server"))
