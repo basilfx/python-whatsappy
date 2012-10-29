@@ -1,5 +1,12 @@
 from collections import MutableMapping
 
+XML_ENT = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;"
+}
+
 class Node(MutableMapping):
     def __init__(self, name, data=None, children=None, **attributes):
         self.name = name
@@ -40,11 +47,11 @@ class Node(MutableMapping):
     def toxml(self, indent=""):
         xml = indent + "<" + self.name
         for name in sorted(self.attributes.keys()):
-            xml += " " + str(name) + "=\"" + str(self.attributes[name]) + "\""
+            xml += " " + str(name) + "=\"" + self.escape(self.attributes[name]) + "\""
         xml += ">"
 
         if self.data:
-            xml += self.data
+            xml += self.escape(self.data)
 
         if self.children:
             xml += "\n"
@@ -54,6 +61,21 @@ class Node(MutableMapping):
 
         xml += "</" + self.name + ">"
         return xml
+
+    def escape(self, string):
+        def escape_char(c):
+            if c in XML_ENT:
+                return XML_ENT[c]
+            elif ord(c) < 0x20 or ord(c) >= 0x7f:
+                return "&#x%02x;" % ord(c)
+            else:
+                return c
+
+        if string is None:
+            return "None"
+        if not isinstance(string, basestring):
+            raise TypeError("Expected str or unicode, got: %s" % type(string))
+        return "".join(map(escape_char, string))
 
     def __str__(self):
         return self.toxml()
