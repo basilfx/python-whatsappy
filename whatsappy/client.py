@@ -10,6 +10,9 @@ from twisted.words.protocols.jabber.sasl_mechanisms import DigestMD5
 from stream import Reader, Writer, MessageIncomplete, EndOfStream
 from node import Node
 
+CHATSTATE_NS = "http://jabber.org/protocol/chatstates"
+CHATSTATES = "active", "inactive", "composing", "paused", "gone"
+
 def hash_secret(secret):
     if ":" in secret:
         # MAC Address
@@ -288,6 +291,16 @@ class Client:
     def message(self, number, text):
         msgid, message = self._message(number, Node("body", data=text))
         self._write(message)
+        return msgid
+
+    def chatstate(self, number, state):
+        if state not in CHATSTATES:
+            raise Exception("Invalid chatstate: %r" % state)
+
+        node = Node(state, xmlns = CHATSTATE_NS)
+        msgid, message = self._message(number, node)
+        self._write(message)
+        return msgid
 
     def image(self, number, url, basename, size, thumbnail = None):
         """
