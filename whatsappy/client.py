@@ -79,11 +79,19 @@ class Client:
         self.socket.sendall(buf)
 
     def _read(self, nbytes = 4096):
+        assert self.socket is not None
+
         # See if there's data available to read
         r, w, x, = select([self.socket], [], [], self.TIMEOUT)
         if self.socket in r:
             # receive any available data, update Reader's buffer
             buf = self.socket.recv(nbytes)
+            if not buf:
+                if self.debug:
+                    print >>sys.stderr, "Socket Closed"
+                self.socket.close()
+                self.socket = None
+
             if self.debug: self.dump("    <", buf)
             self.reader.data(buf)
 
