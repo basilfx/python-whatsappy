@@ -316,21 +316,51 @@ class Client:
         Url should be publicly accessible
         Basename does not have to match Url
         Size is the size of the image, in bytes
-        Thumbnail should be a base64 encoded JPEG image, if proviced.
+        Thumbnail should be a Base64 encoded JPEG image, if provided.
         """
         # TODO: Where does WhatsApp upload images?
-        # TODO: Are PNG thumbnails supported?
+        # PNG thumbnails are apparently not supported
 
         media = Node("media", xmlns="urn:xmpp:whatsapp:mms", type="image",
                      url=url, file=basename, size=size, data=thumbnail)
         msgid, message = self._message(number, media)
         self._write(message)
+        return msgid
+
+    def audio(self, number, url, basename, size, attributes):
+        valid_attributes = ("abitrate", "acodec", "asampfmt", "asampfreq",
+                            "duration", "encoding", "filehash", "mimetype")
+
+        for name, value in attributes.iteritems:
+            if name not in valid_attributes:
+                raise Exception("Unknown audio attribute: %r" % name)
+
+        media = Node("media", xmlns="urn:xmpp:whatsapp:mms", type="audio",
+                     url=url, file=basename, size=size, **attributes)
+        msgid, message = self._message(number, media)
+        self._write(message)
+        return msgid
 
     def location(self, number, latitude, longitude):
-        "Send a location update to a contact"
-        # XXX: PHP WhatsApi does not include the jabber:x:event
+        """
+        Send a location update to a contact.
+        """
 
         media = Node("media", xmlns="urn:xmpp:whatsapp:mms", type="location",
                      latitude=latitude, longitude=longitude)
         msgid, message = self._message(number, media)
         self._write(message)
+        return msgid
+
+    def vcard(self, number, name, data):
+        """
+        Send a vCard to a contact. WhatsApp will display the PHOTO if it is
+        embedded in the vCard data (as Base64 encoded JPEG).
+        """
+
+        vcard = Node("vcard", data=data)
+        vcard["name"] = name
+        media = Node("media", children=[vcard], xmlns="urn:xmpp:whatsapp:mms",
+                     type="vcard", encoding="text")
+        msgid, message = self._message(number, media)
+        return msgid
