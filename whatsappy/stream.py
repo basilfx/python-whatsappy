@@ -50,20 +50,17 @@ class Reader:
             self._consume(1)
             raise EndOfStream()
 
-        name = self.string()
-        attributes = self.attributes(length)
-
-        children = []
-        data = None
+        node = Node(self.string())
+        node.attributes = self.attributes(length)
 
         if (length % 2) == 0:
             token = self._peek(1)
             if token == "\xF8" or token == "\xF9":
-                children = self.list()
+                node.children = self.list()
             else:
-                data = self.string()
+                node.data = self.string()
 
-        return Node(name, data, children, **attributes)
+        return node
 
     def peek_int8(self):
         return ord(self._peek(1))
