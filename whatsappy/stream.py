@@ -118,11 +118,11 @@ class Reader:
             server = self.string()
             return user + "@" + server
         elif token == "\xFC":
-            return self._consume(self.int8())
+            return self._consume(self.int8()).decode("utf-8")
         elif token == "\xFD":
-            return self._consume(self.int24())
+            return self._consume(self.int24()).decode("utf-8")
         elif token == "\xFE":
-            return tok2str(0xF5 + self.int8())
+            return tok2str(0xF5 + self.int8()).decode("utf-8")
         else:
             raise Exception("Unknown string token '%02x'" % ord(token))
 
@@ -194,6 +194,8 @@ class Writer:
         return buf
 
     def bytes(self, string):
+        if isinstance(string, unicode):
+            string = string.encode("utf-8")
         if len(string) > 0xFF:
             leader = "\xFD" + self.int24(len(string))
         else:
