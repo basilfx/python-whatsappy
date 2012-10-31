@@ -4,7 +4,7 @@ from ..node import Node
 
 class NodeTest(unittest.TestCase):
     def test_ctor(self):
-        "Test some variants of the Node __init__ method"
+        """Test some variants of the Node __init__ method"""
 
         node = Node("name", "data")
         self.assertEqual("name", node.name)
@@ -14,7 +14,7 @@ class NodeTest(unittest.TestCase):
         self.assertEqual(dict(attr1="value1", attr2="value2"), node.attributes)
 
     def test_toxml(self):
-        "Test if serializing to XML works"
+        """Test if serializing to XML works"""
 
         node = Node("name")
         self.assertEqual("<name></name>", node.toxml())
@@ -30,7 +30,7 @@ class NodeTest(unittest.TestCase):
         self.assertEqual(xml, node.toxml())
 
     def test_dict(self):
-        "Test some of the dictionary interface"
+        """Test some of the dictionary interface"""
 
         node = Node("name")
         node["attr1"] = "value1"

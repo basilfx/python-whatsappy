@@ -104,14 +104,14 @@ class Reader:
         for _ in range((length - 1) / 2):
             name = self.string()
             value = self.string()
-            attributes[name] = value;
+            attributes[name] = value
         return attributes
 
     def string(self):
         token = self._consume(1)
         if token < "\x05":
             return ""
-        elif token >= "\x05" and token <= "\xF5":
+        elif "\x05" <= token <= "\xF5":
             return tok2str(ord(token))
         elif token == "\xFA":
             user = self.string()
