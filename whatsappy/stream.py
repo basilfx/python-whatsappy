@@ -15,7 +15,6 @@ class Reader:
     def __init__(self, buf = ""):
         self.buf = buf
         self.offset = 0
-        self.debug = True
         self.decrypt = None
 
     def data(self, buf):
