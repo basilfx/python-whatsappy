@@ -2,11 +2,14 @@ python-whatsapp
 ===============
 
 A Python Client Library for WhatsApp.
-The protocol has been ported from [venomous0x's PHP Code](https://github.com/venomous0x/WhatsAPI).
+The initial version of the protocol has been written with help from
+[venomous0x's PHP Code](https://github.com/venomous0x/WhatsAPI), later versions
+are mostly based on the on the code in the official Android App.
 
 Dependencies
 ------------
-The Client uses the Digest-MD5 class from Twisted to Authenticate.
+The Client uses the [pbkdf2 library](https://www.dlitz.net/software/python-pbkdf2/)
+written by Dwayne C. Litzenberger, which you can install using pip.
 
 License
 -------
