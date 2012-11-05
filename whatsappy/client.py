@@ -3,25 +3,13 @@ import sys
 import socket
 from select import select
 from time import time
-from hashlib import md5
 
-from twisted.words.protocols.jabber.sasl_mechanisms import DigestMD5
-
-from stream import Reader, Writer, MessageIncomplete, EndOfStream
-from node import Node
+from .stream import Reader, Writer, MessageIncomplete, EndOfStream
+from .encryption import Encryption
+from .node import Node
 
 CHATSTATE_NS = "http://jabber.org/protocol/chatstates"
 CHATSTATES = "active", "inactive", "composing", "paused", "gone"
-
-def hash_secret(secret):
-    if ":" in secret:
-        # MAC Address
-        data = secret.upper() + secret.upper()
-    else:
-        # IMEI Number
-        data = secret[::-1]
-
-    return md5(data).hexdigest()
 
 class Callback:
     def __init__(self, name, callback):
@@ -35,8 +23,8 @@ class Callback:
         self.called += 1
 
 class Client:
-    HOST = "bin-short.whatsapp.net"
-    PORT = 5222
+    HOST = "c.whatsapp.net"
+    PORTS = [443, 5222]
     TIMEOUT = 0.1 # s
 
     SERVER = "s.whatsapp.net"
@@ -44,17 +32,15 @@ class Client:
     GROUPHOST = "g.us"
     DIGEST_URI = "xmpp/s.whatsapp.net"
 
-    DEVICE = "iPhone"
-    VERSION = "2.8.2"
+    VERSION = "Android-2.8.5732"
 
     def __init__(self, number, secret, nickname = None):
         self.number = number
         self.secret = secret
-        self.password = hash_secret(secret)
         self.nickname = nickname
 
         self.host = self.HOST
-        self.port = self.PORT
+        self.port = self.PORTS[0]
 
         self.debug = False
         self.socket = None
@@ -70,11 +56,11 @@ class Client:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((self.host, self.port))
 
-    def _write(self, buf):
+    def _write(self, buf, encrypt=False):
         if isinstance(buf, Node):
             if self.debug:
                 sys.stderr.write(buf.toxml(indent="xml > ") + "\n")
-            buf = self.writer.node(buf)
+            buf = self.writer.node(buf, encrypt)
 
         if self.debug: self.dump("    >", buf)
         self.socket.sendall(buf)
@@ -131,18 +117,15 @@ class Client:
             print >>sys.stderr, prefix + " " + hexstr + bytestr
 
     def _challenge(self, node):
-        # Use SASL DIGEST-MD5 Mechanism from Twisted Words
-        mechanism = DigestMD5("xmpp", self.SERVER, None, self.number, self.password)
+        encryption = Encryption(self.number, self.secret, node.data)
+        self.writer.encrypt = encryption.encrypt
+        self.reader.decrypt = encryption.decrypt
 
-        # Decode the challende, and encode the resulting data
-        challenge = node.data.decode("base64")
-        data = mechanism.getResponse(challenge)
-        b64data = data.encode("base64").replace("\n", "")
+        if self.debug:
+            print >>sys.stderr, "Session Key:", encryption.export_key()
 
-        # Create a response node
-        response = Node("response", data=b64data)
-        response["xmlns"] = node["xmlns"]
-
+        response = Node("response", xmlns="urn:ietf:params:xml:ns:xmpp-sasl",
+                        data=encryption.get_response())
         self._write(response)
         self._incoming()
 
@@ -239,16 +222,22 @@ class Client:
 
         self._connect()
 
-        resource = "%s-%s-%d" % (self.DEVICE, self.VERSION, self.PORT)
-        buf = self.writer.start_stream(self.SERVER, resource)
+        buf = self.writer.start_stream(self.SERVER, self.VERSION)
         self._write(buf)
 
         features = Node("stream:features")
         features.add(Node("receipt_acks"))
-        features.add(Node("groups"))
+        features.add(Node("w:profile:picture", type="all"))
+        features.add(Node("status"))
+
+        # m1.java:48
+        # featrues.add(Node("notification", type="participant"))
+        # features.add(Node("groups"))
+
         self._write(features)
 
-        auth = Node("auth", xmlns="urn:ietf:params:xml:ns:xmpp-sasl", mechanism="DIGEST-MD5-1")
+        auth = Node("auth", xmlns="urn:ietf:params:xml:ns:xmpp-sasl",
+                    mechanism="WAUTH-1", user=self.number)
         self._write(auth)
 
         def on_success(node):

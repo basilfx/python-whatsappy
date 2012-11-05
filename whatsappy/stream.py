@@ -1,3 +1,5 @@
+import sys
+
 from .tokens import str2tok, tok2str
 from .node import Node
 
@@ -7,9 +9,14 @@ class MessageIncomplete(Exception):
 class EndOfStream(Exception):
     pass
 
+ENCRYPTED = 0x08
+
 class Reader:
     def __init__(self, buf = ""):
         self.buf = buf
+        self.offset = 0
+        self.debug = True
+        self.decrypt = None
 
     def data(self, buf):
         self.buf += buf
@@ -17,6 +24,8 @@ class Reader:
     def _consume(self, bytes):
         if bytes > len(self.buf):
             raise Exception("Not enough bytes available")
+
+        self.offset += bytes
 
         data = self.buf[:bytes]
         self.buf = self.buf[bytes:]
@@ -29,13 +38,36 @@ class Reader:
         if len(self.buf) <= 2:
             raise MessageIncomplete()
 
-        length = self.peek_int16()
+        length = self.peek_int24()
+        flags  = (length & 0x00F00000) >> 20
+        length = (length & 0x000FFFFF)
+
         if length + 2 > len(self.buf):
             raise MessageIncomplete()
 
-        # Actual value is ignored
-        self.int16()
-        return self._read()
+        self.int24()
+
+        if flags & ENCRYPTED:
+            return self._read_encrypted(length)
+        else:
+            return self._read()
+
+    def _read_encrypted(self, length):
+        assert self.decrypt is not None
+
+        message_buf = self._consume(length)
+        message_buf = self.decrypt(message_buf)
+
+        buf = self.buf
+        offset = self.offset
+
+        try:
+            self.buf = message_buf
+            self.offset = 0
+            return self._read()
+        finally:
+            self.buf = buf
+            self.offset = offset
 
     def _read(self):
         length = self.list_start()
@@ -98,6 +130,8 @@ class Reader:
             return self.int8()
         elif token == "\xF9":
             return self.int16()
+        else:
+            raise Exception("Unknown list_start token '%02x'" % ord(token))
 
     def attributes(self, length):
         attributes = {}
@@ -118,33 +152,46 @@ class Reader:
             server = self.string()
             return user + "@" + server
         elif token == "\xFC":
-            return self._consume(self.int8()).decode("utf-8")
+            return self._consume(self.int8())
         elif token == "\xFD":
-            return self._consume(self.int24()).decode("utf-8")
+            return self._consume(self.int24())
         elif token == "\xFE":
-            return tok2str(0xF5 + self.int8()).decode("utf-8")
+            return tok2str(0xF5 + self.int8())
         else:
             raise Exception("Unknown string token '%02x'" % ord(token))
 
 class Writer:
+    VERSION = 1, 2
+
+    def __init__(self):
+        self.encrypt = None
+
     def start_stream(self, domain, resource):
         attributes = { "to": domain, "resource": resource }
 
-        buf = "WA"
-        buf += "\x01\x01\x00\x19"
+        buf = "WA%c%c" % self.VERSION
+
+        buf += "\x00\x00\x18"
+
         buf += self.list_start(len(attributes) * 2 + 1)
         buf += "\x01"
         buf += self.attributes(attributes)
 
         return buf
 
-    def node(self, node):
+    def node(self, node, encrypt = False):
         if node is None:
             buf = "\x00"
         else:
             buf = self._node(node)
 
-        return self.int16(len(buf)) + buf
+        if encrypt:
+            header = self.int24(ENCRYPTED << 20 | len(buf))
+            buf = self.encrypt(buf)
+        else:
+            header = self.int24(len(buf))
+
+        return header + buf
 
     def _node(self, node):
         length = 1
@@ -203,6 +250,8 @@ class Writer:
         return leader + string
 
     def string(self, string):
+        if not isinstance(string, basestring):
+            string = str(string)
         token = str2tok(string)
         if token is not None:
             return self.token(token)
@@ -215,8 +264,8 @@ class Writer:
     def attributes(self, attributes):
         buf = ""
         for key, value in attributes.iteritems():
-            buf += self.string(str(key))
-            buf += self.string(str(value))
+            buf += self.string(key)
+            buf += self.string(value)
         return buf
 
     def list_start(self, length):
