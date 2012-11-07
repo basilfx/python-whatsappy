@@ -1,3 +1,5 @@
+import sys
+
 from time import time
 from pbkdf2 import PBKDF2
 from hashlib import md5, sha1
@@ -44,11 +46,7 @@ class Encryption:
     def get_response(self):
         data = "%s%s%d" % (self.number, self.challenge, time())
         encrypted = self.rc4out.processBytes(data)
-
-        self.macout.update(encrypted)
-        digest = self.macout.digest()
-
-        return digest[:4] + encrypted
+        return self.mac(encrypted) + encrypted
 
     def export_key(self):
         return self.key.encode("hex")
@@ -66,15 +64,9 @@ class Encryption:
         self.rc4out.setKey(self.key)
         self.rc4out.processBytes("\0" * 256)
 
-        self.macin = hmac.new(self.key, digestmod=sha1)
-        self.macout = hmac.new(self.key, digestmod=sha1)
-
     def encrypt(self, data):
         encrypted = self.rc4out.processBytes(data)
-        self.macout.update(encrypted)
-
-        digest = self.macout.digest()
-        return encrypted + digest[:4]
+        return encrypted + self.mac(encrypted)
 
     def decrypt(self, data, macAtStart=True):
         if macAtStart:
@@ -84,12 +76,14 @@ class Encryption:
             encrypted = data[:-4]
             mac = data[-4:]
 
-        self.macin.update(encrypted)
         decrypted = self.rc4in.processBytes(encrypted)
 
-        calculatedMac = self.macin.digest()[:4]
+        calculatedMac = self.mac(encrypted)
         if mac != calculatedMac:
             print >>sys.stderr, "MAC mismatch (Expected %s; Found %s)" % (
                 calculatedMac.encode("hex"), mac.encode("hex"))
 
         return decrypted
+
+    def mac(self, data):
+        return hmac.new(self.key, data, digestmod=sha1).digest()[:4]
