@@ -39,8 +39,8 @@ class Client:
         self.secret = secret
         self.nickname = nickname
 
-        self.host = self.HOST
-        self.port = self.PORTS[0]
+        self.addrinfo = None
+        self.portindex = 0
 
         self.debug = False
         self.socket = None
@@ -52,9 +52,29 @@ class Client:
 
         self.callbacks = {}
 
-    def _connect(self):
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.connect((self.host, self.port))
+    def _connect(self, tries=3):
+        if not self.addrinfo:
+            self.addrinfo = socket.getaddrinfo(self.HOST, self.PORTS[self.portindex], 0, 0, socket.SOL_TCP)
+            self.portindex = (self.portindex + 1) % len(self.PORTS)
+
+
+        last_ex = None
+        for i in range(tries):
+            family, socktype, proto, canonname, sockaddr = self.addrinfo.pop()
+
+            if self.debug:
+                print >>sys.stderr, "Connecting to %s:%d" % sockaddr
+
+            self.socket = socket.socket(family, socktype, proto)
+            try:
+                self.socket.connect(sockaddr)
+                break
+            except socket.error, ex:
+                if self.debug:
+                    print >>sys.stderr, "Try %d/%d: %s" % (i + 1, tries, ex)
+                last_ex = ex
+        else:
+            raise last_ex
 
     def _write(self, buf, encrypt=False):
         if isinstance(buf, Node):
