@@ -26,7 +26,7 @@ class Encryption:
     KEY_ITERATIONS = 16
     KEY_LENGTH = 20
 
-    def __init__(self, number, secret = None, challenge = None):
+    def __init__(self, number, secret=None, challenge=None):
         self.number = number
         self.challenge = challenge
 
@@ -68,14 +68,8 @@ class Encryption:
         encrypted = self.rc4out.processBytes(data)
         return encrypted + self.mac(encrypted)
 
-    def decrypt(self, data, macAtStart=True):
-        if macAtStart:
-            encrypted = data[4:]
-            mac = data[:4]
-        else:
-            encrypted = data[:-4]
-            mac = data[-4:]
-
+    def decrypt(self, data):
+        encrypted, mac = data[4:], data[:4]
         decrypted = self.rc4in.processBytes(encrypted)
 
         calculatedMac = self.mac(encrypted)
