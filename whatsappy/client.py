@@ -76,7 +76,7 @@ class Client:
         else:
             raise last_ex
 
-    def _write(self, buf, encrypt=False):
+    def _write(self, buf, encrypt=None):
         if isinstance(buf, Node):
             if self.debug:
                 sys.stderr.write(buf.toxml(indent="xml > ") + "\n")
@@ -146,7 +146,7 @@ class Client:
 
         response = Node("response", xmlns="urn:ietf:params:xml:ns:xmpp-sasl",
                         data=encryption.get_response())
-        self._write(response)
+        self._write(response, encrypt=False)
         self._incoming()
 
     def _received(self, node):
