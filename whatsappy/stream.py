@@ -9,7 +9,8 @@ class MessageIncomplete(Exception):
 class EndOfStream(Exception):
     pass
 
-ENCRYPTED = 0x08
+ENCRYPTED_IN  = 0x8
+ENCRYPTED_OUT = 0x1
 
 class Reader:
     def __init__(self, buf = ""):
@@ -41,12 +42,12 @@ class Reader:
         flags  = (length & 0x00F00000) >> 20
         length = (length & 0x000FFFFF)
 
-        if length + 2 > len(self.buf):
+        if length + 3 > len(self.buf):
             raise MessageIncomplete()
 
         self.int24()
 
-        if flags & ENCRYPTED:
+        if flags & ENCRYPTED_IN:
             return self._read_encrypted(length)
         else:
             return self._read()
@@ -178,15 +179,18 @@ class Writer:
 
         return buf
 
-    def node(self, node, encrypt = False):
+    def node(self, node, encrypt=None):
         if node is None:
             buf = "\x00"
         else:
             buf = self._node(node)
 
+        if encrypt is None:
+            encrypt = self.encrypt is not None
+
         if encrypt:
-            header = self.int24(ENCRYPTED << 20 | len(buf))
             buf = self.encrypt(buf)
+            header = self.int24(ENCRYPTED_OUT << 20 | len(buf))
         else:
             header = self.int24(len(buf))
 
