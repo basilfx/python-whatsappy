@@ -7,25 +7,15 @@ from time import time
 from .stream import Reader, Writer, MessageIncomplete, EndOfStream
 from .encryption import Encryption
 from .node import Node
+from .callbacks import Callback
 
 CHATSTATE_NS = "http://jabber.org/protocol/chatstates"
 CHATSTATES = "active", "inactive", "composing", "paused", "gone"
 
-class Callback:
-    def __init__(self, name, callback):
-        self.name = name
-        self.callback = callback
-        self.called = 0
-        self.result = None
-
-    def apply(self, node):
-        self.result = self.callback(node)
-        self.called += 1
-
 class Client:
     HOST = "c.whatsapp.net"
     PORTS = [443, 5222]
-    TIMEOUT = 0.1 # s
+    TIMEOUT = 0.1 # seconds
 
     SERVER = "s.whatsapp.net"
     REALM = "s.whatsapp.net"
@@ -34,7 +24,9 @@ class Client:
 
     VERSION = "Android-2.8.5732"
 
-    def __init__(self, number, secret, nickname = None):
+    PING_INTERVAL = 60 # seconds
+
+    def __init__(self, number, secret, nickname=None, keep_alive=True):
         self.number = number
         self.secret = secret
         self.nickname = nickname
@@ -49,6 +41,8 @@ class Client:
 
         self.messages = []
         self.account_info = None
+        self.last_ping = time()
+        self.keep_alive = keep_alive
 
         self.callbacks = {}
 
@@ -149,6 +143,14 @@ class Client:
         self._write(response, encrypt=False)
         self._incoming()
 
+    def _ping(self):
+        msgid = self._msgid()
+
+        message = Node("iq", id=msgid, type="get", to=self.SERVER)
+        message.add(Node("ping", xmlns="w:p"))
+
+        self._write(message)
+
     def _received(self, node):
         request = node.child("request")
         if request is None or request["xmlns"] != "urn:xmpp:receipts":
@@ -160,6 +162,10 @@ class Client:
         self._write(message)
 
     def _iq(self, node):
+        # Node without children could be a ping reply
+        if len(node.children) == 0: 
+            return
+
         iq = node.children[0]
         if node["type"] == "get" and iq.name == "ping":
             self._write(Node("iq", to=self.SERVER, id=node["id"], type="result"))
@@ -173,6 +179,8 @@ class Client:
         nodes = self._read()
 
         for node in nodes:
+            print ">>>", node.name
+
             if node.name == "challenge":
                 self._challenge(node)
             elif node.name == "message":
@@ -184,8 +192,9 @@ class Client:
                 raise Exception(node.children[0].name)
 
             if node.name in self.callbacks:
-                for record in self.callbacks[node.name]:
-                    record.apply(node)
+                for callback in self.callbacks[node.name]:
+                    if callback.test(node):
+                        callback.apply(node)
 
             #elif node.name in ("start", "stream:features"):
             #    pass # Not interesting
@@ -196,46 +205,62 @@ class Client:
     def _msgid(self):
         return "msg-%d" % (time() * 1000)
 
-    def register_callback(self, name, callback):
-        record = Callback(name, callback)
+    def register_callback(self, callback):
+        if callback.name not in self.callbacks:
+            self.callbacks[callback.name] = []
 
-        if name not in self.callbacks:
-            self.callbacks[name] = []
+        # Add callback to the other callbacks
+        self.callbacks[callback.name].append(callback)
 
-        self.callbacks[name].append(record)
-        return record
+    def register_callbacks(self, *callbacks):
+        for callback in callbacks:
+            self.register_callback(callback)
 
-    def unregister_callback(self, record):
-        self.callbacks[record.name].remove(record)
+    def register_callback_and_wait(self, callback):
+        self.register_callback(callback)
+        self.wait_for_callback(callback)
 
-    def wait_for_callback(self, record):
-        while not record.called:
+    def unregister_callback(self, callback):
+        self.callbacks[callback.name].remove(callback)
+
+    def wait_for_callback(self, callback):
+        while not callback.called:
             self._incoming()
 
-        self.unregister_callback(record)
+        self.unregister_callback(callback)
 
-        if isinstance(record.result, Exception):
-            raise record.result
+        if isinstance(callback.result, Exception):
+            raise callback.result
 
-        return record.result
+        return callback.result
 
-    def wait_for_any_callback(self, records):
+    def wait_for_any_callback(self, callbacks):
         called = None
         while called is None:
-            for record in records:
-                if record.called:
-                    called = record
+            for callback in callbacks:
+                if callback.called:
+                    called = callback
                     break
             else:
                 self._incoming()
 
-        for record in records:
-            self.unregister_callback(record)
+        for callback in callbacks:
+            self.unregister_callback(callback)
 
         if isinstance(called.result, Exception):
             raise called.result
 
         return called.result
+
+    def service_loop(self):
+        self._incoming()
+
+        # Send a ping once in a while if keep alive and still connected
+        if self.keep_alive:
+            if (time() - self.last_ping) > self.PING_INTERVAL:
+                if self.socket != None:
+                    self._ping()
+                    self.last_ping = time()
 
     def login(self):
         assert self.socket is None
@@ -251,8 +276,8 @@ class Client:
         features.add(Node("status"))
 
         # m1.java:48
-        # featrues.add(Node("notification", type="participant"))
-        # features.add(Node("groups"))
+        features.add(Node("notification", type="participant"))
+        features.add(Node("groups"))
 
         self._write(features)
 
@@ -269,8 +294,12 @@ class Client:
             presence["name"] = self.nickname
             self._write(presence)
 
-        callback = self.register_callback("success", on_success)
-        self.wait_for_callback(callback)
+        # Create new callback
+        callback = Callback("success", on_success)
+        self.register_callback_and_wait(callback)
+
+        # Done
+        return self.account_info != None
 
     def last_seen(self, number):
         msgid = self._msgid()
@@ -289,8 +318,8 @@ class Client:
                 return Exception(node.child("error").children[0].name)
             return int(node.child("query")["seconds"])
 
-        callback = self.register_callback("iq", on_iq)
-        return self.wait_for_callback(callback)
+        callback = Callback("iq", on_iq)
+        self.register_callback_and_wait(callback)
 
     def _message(self, to, node, group=False):
         msgid = self._msgid()
@@ -308,6 +337,11 @@ class Client:
 
     def message(self, number, text):
         msgid, message = self._message(number, Node("body", data=text))
+        self._write(message)
+        return msgid
+
+    def group_message(self, group, text):
+        msgid, message = self._message(group, Node("body", data=text), True)
         self._write(message)
         return msgid
 
