@@ -3,6 +3,8 @@ from datetime import date, timedelta
 
 from .client import Client
 
+import sys, base64
+
 num_args = { "interactive": 0, "login": 0, "lastseen": 1, "message": (1, 2), "image": 2, "location": 3 }
 commands = num_args.keys()
 
@@ -45,7 +47,7 @@ if not args.number or not args.secret:
 if args.debug:
     args.verbose = True
 
-client = Client(args.number, args.secret)
+client = Client(args.number, base64.b64decode(args.secret))
 client.debug = args.debug
 client.login()
 
@@ -57,7 +59,9 @@ if args.verbose:
     print
 
 if command == "interactive":
-    pass # TODO
+    # It's still not interactive, but it shows what is happening
+    while True:
+        client.service_loop()
 elif command == "lastseen":
     number = arguments[0]
     s = client.last_seen(number)
