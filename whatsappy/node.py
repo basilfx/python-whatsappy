@@ -44,6 +44,9 @@ class Node(MutableMapping):
                 return child
         return None
 
+    def has_child(self, name):
+        return self.child(name) != None
+
     def toxml(self, indent=""):
         xml = indent + "<" + self.name
         for name in sorted(self.attributes.keys()):
