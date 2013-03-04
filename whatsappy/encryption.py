@@ -27,21 +27,13 @@ class Encryption:
     KEY_LENGTH = 20
 
     def __init__(self, number, secret=None, challenge=None):
-        self.number = number
+        self.number = str(number) # Unicode not allowed
+        self.secret = secret
         self.challenge = challenge
 
-        if secret is not None:
-            passphrase = self.hash_secret(secret)
-            pbkdf2 = PBKDF2(passphrase, challenge, iterations=self.KEY_ITERATIONS)
-            key = pbkdf2.read(self.KEY_LENGTH)
-            self.set_key(key)
-
-    def hash_secret(self, secret):
-        if ":" in secret: # MAC Address
-            data = secret.upper() + secret.upper()
-        else: # IMEI Number
-            data = secret[::-1]
-        return md5(data).hexdigest()
+        pbkdf2 = PBKDF2(self.secret, challenge, iterations=self.KEY_ITERATIONS)
+        key = pbkdf2.read(self.KEY_LENGTH)
+        self.set_key(key)
 
     def get_response(self):
         data = "%s%s%d" % (self.number, self.challenge, time())
