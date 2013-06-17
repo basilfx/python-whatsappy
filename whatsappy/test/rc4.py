@@ -26,7 +26,7 @@ class RC4Test(unittest.TestCase):
 
         for key, plain, cipher in tests:
             rc4 = RC4Engine(key)
-            self.assertEqual(rc4.processBytes(plain), cipher.decode("hex"))
+            self.assertEqual(rc4.process_bytes(plain), cipher.decode("hex"))
 
     def test_state(self):
         """
@@ -38,13 +38,13 @@ class RC4Test(unittest.TestCase):
         b = RC4Engine(KEY)
 
         message = os.urandom(128)
-        self.assertEqual(a.processBytes(message), b.processBytes(message))
+        self.assertEqual(a.process_bytes(message), b.process_bytes(message))
         self.assertEqual(a.box, b.box)
 
         message = os.urandom(128)
-        self.assertEqual(a.processBytes(b.processBytes(message)), message, "encryption is reversible")
+        self.assertEqual(a.process_bytes(b.process_bytes(message)), message, "encryption is reversible")
         self.assertEqual(a.box, b.box)
 
         message = os.urandom(128)
-        self.assertEqual(a.processBytes(b.processBytes(message)), message, "encryption is reversible")
+        self.assertEqual(a.process_bytes(b.process_bytes(message)), message, "encryption is reversible")
         self.assertEqual(a.box, b.box)

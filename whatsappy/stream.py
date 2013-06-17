@@ -12,7 +12,7 @@ class EndOfStream(Exception):
 ENCRYPTED_IN  = 0x8
 ENCRYPTED_OUT = 0x1
 
-class Reader:
+class Reader(object):
     def __init__(self, buf = ""):
         self.buf = buf
         self.offset = 0
@@ -160,7 +160,7 @@ class Reader:
         else:
             raise Exception("Unknown string token '%02x'" % ord(token))
 
-class Writer:
+class Writer(object):
     VERSION = 1, 2
 
     def __init__(self):

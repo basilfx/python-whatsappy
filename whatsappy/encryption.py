@@ -7,7 +7,7 @@ import hmac
 
 from .rc4 import RC4Engine
 
-class Encryption:
+class Encryption(object):
     """
     This class handles:
      - creating the session key
@@ -37,7 +37,7 @@ class Encryption:
 
     def get_response(self):
         data = "%s%s%d" % (self.number, self.challenge, time())
-        encrypted = self.rc4out.processBytes(data)
+        encrypted = self.rc4out.process_bytes(data)
         return self.mac(encrypted) + encrypted
 
     def export_key(self):
@@ -49,20 +49,20 @@ class Encryption:
         self.key = key
 
         self.rc4in = RC4Engine()
-        self.rc4in.setKey(self.key)
-        self.rc4in.processBytes("\0" * 256)
+        self.rc4in.set_key(self.key)
+        self.rc4in.process_bytes("\0" * 256)
 
         self.rc4out = RC4Engine()
-        self.rc4out.setKey(self.key)
-        self.rc4out.processBytes("\0" * 256)
+        self.rc4out.set_key(self.key)
+        self.rc4out.process_bytes("\0" * 256)
 
     def encrypt(self, data):
-        encrypted = self.rc4out.processBytes(data)
+        encrypted = self.rc4out.process_bytes(data)
         return encrypted + self.mac(encrypted)
 
     def decrypt(self, data):
         encrypted, mac = data[4:], data[:4]
-        decrypted = self.rc4in.processBytes(encrypted)
+        decrypted = self.rc4in.process_bytes(encrypted)
 
         calculatedMac = self.mac(encrypted)
         if mac != calculatedMac:

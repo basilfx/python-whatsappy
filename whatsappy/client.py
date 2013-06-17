@@ -12,7 +12,7 @@ from .callbacks import Callback
 CHATSTATE_NS = "http://jabber.org/protocol/chatstates"
 CHATSTATES = "active", "inactive", "composing", "paused", "gone"
 
-class Client:
+class Client(object):
     HOST = "c.whatsapp.net"
     PORTS = [443, 5222]
     TIMEOUT = 0.1 # seconds

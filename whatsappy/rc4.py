@@ -1,4 +1,4 @@
-class RC4Engine:
+class RC4Engine(object):
     """
     Python port of the RC4 Engine in the Android version of WhatsApp, which
     seems to be an obfuscated version of the RC4Engine class found in the
@@ -6,19 +6,19 @@ class RC4Engine:
     """
 
     def __init__(self, key=None):
-        """Initialize the engine. If a key is given, setKey is called"""
+        """Initialize the engine. If a key is given, set_key is called."""
 
         if key is None:
             self.box = None
-            self.workingKey = None
+            self.working_key = None
             self.x = 0
             self.y = 0
         else:
-            self.setKey(key)
+            self.set_key(key)
 
-    def setKey(self, key):
+    def set_key(self, key):
         self.box = range(256)
-        self.workingKey = key
+        self.working_key = key
         self.x = 0
         self.y = 0
 
@@ -27,8 +27,8 @@ class RC4Engine:
             j = (j + self.box[i] + ord(key[i % len(key)])) % 256
             self.box[i], self.box[j] = self.box[j], self.box[i]
 
-    def processBytes(self, data):
-        assert self.workingKey is not None
+    def process_bytes(self, data):
+        assert self.working_key is not None
 
         out = []
         for char in data:
