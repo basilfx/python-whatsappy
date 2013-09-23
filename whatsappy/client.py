@@ -1,16 +1,20 @@
-import sys
+from whatsappy.stream import Reader, Writer, MessageIncomplete, EndOfStream
+from whatsappy.encryption import Encryption
+from whatsappy.callbacks import Callback
+from whatsappy.node import Node
+from whatsappy.exceptions import ConnectionError
 
-import socket
 from select import select
 from time import time
 
-from .stream import Reader, Writer, MessageIncomplete, EndOfStream
-from .encryption import Encryption
-from .node import Node
-from .callbacks import Callback
+import sys
+import socket
+import logging
 
 CHATSTATE_NS = "http://jabber.org/protocol/chatstates"
-CHATSTATES = "active", "inactive", "composing", "paused", "gone"
+CHATSTATES = ("active", "inactive", "composing", "paused", "gone")
+
+logger = logging.getLogger(__name__)
 
 class Client(object):
     HOST = "c.whatsapp.net"
@@ -24,7 +28,7 @@ class Client(object):
 
     VERSION = "Android-2.8.5732"
 
-    PING_INTERVAL = 60 # seconds
+    PING_INTERVAL = 30 # seconds
 
     def __init__(self, number, secret, nickname=None, keep_alive=True):
         self.number = number
@@ -41,6 +45,7 @@ class Client(object):
 
         self.messages = []
         self.account_info = None
+
         self.last_ping = time()
         self.keep_alive = keep_alive
 
@@ -50,7 +55,6 @@ class Client(object):
         if not self.addrinfo:
             self.addrinfo = socket.getaddrinfo(self.HOST, self.PORTS[self.portindex], 0, 0, socket.SOL_TCP)
             self.portindex = (self.portindex + 1) % len(self.PORTS)
-
 
         last_ex = None
         for i in range(tries):
@@ -70,13 +74,25 @@ class Client(object):
         else:
             raise last_ex
 
+    def _disconnected(self):
+        if not self.socket is None:
+            self.socket.close()
+            self.socket = None
+
+        if self.debug:
+            print >>sys.stderr, "Socket Closed"
+
+        raise ConnectionError()
+
     def _write(self, buf, encrypt=None):
         if isinstance(buf, Node):
             if self.debug:
                 sys.stderr.write(buf.toxml(indent="xml > ") + "\n")
             buf = self.writer.node(buf, encrypt)
 
-        if self.debug: self.dump("    >", buf)
+        if self.debug:
+            self.dump("    >", buf)
+
         self.socket.sendall(buf)
 
     def _read(self, nbytes = 4096):
@@ -88,12 +104,11 @@ class Client(object):
             # receive any available data, update Reader's buffer
             buf = self.socket.recv(nbytes)
             if not buf:
-                if self.debug:
-                    print >>sys.stderr, "Socket Closed"
-                self.socket.close()
-                self.socket = None
+                self._disconnected()
 
-            if self.debug: self.dump("    <", buf)
+            if self.debug:
+                self.dump("    <", buf)
+
             self.reader.data(buf)
 
         nodes = []
@@ -106,10 +121,7 @@ class Client(object):
             except MessageIncomplete:
                 break
             except EndOfStream:
-                if self.debug:
-                    print >>sys.stderr, "Connection Closed"
-                self.socket.close()
-                self.socket = None
+                self._disconnected()
                 break
         return nodes
 
@@ -163,7 +175,7 @@ class Client(object):
 
     def _iq(self, node):
         # Node without children could be a ping reply
-        if len(node.children) == 0: 
+        if len(node.children) == 0:
             return
 
         iq = node.children[0]
@@ -190,6 +202,8 @@ class Client(object):
                 self._iq(node)
             elif node.name == "stream:error":
                 raise Exception(node.children[0].name)
+
+            #print str(node)[0:500]
 
             if node.name in self.callbacks:
                 for callback in self.callbacks[node.name]:
@@ -253,14 +267,14 @@ class Client(object):
         return called.result
 
     def service_loop(self):
+        # Handle incoming data
         self._incoming()
 
         # Send a ping once in a while if keep alive and still connected
         if self.keep_alive:
             if (time() - self.last_ping) > self.PING_INTERVAL:
-                if self.socket != None:
-                    self._ping()
-                    self.last_ping = time()
+                self._ping()
+                self.last_ping = time()
 
     def login(self):
         assert self.socket is None
