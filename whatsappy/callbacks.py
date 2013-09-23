@@ -12,13 +12,26 @@ class Callback(object):
     def test(self, node):
         """
         Test whether a callback should be executed.
+
+        node -- The node to check
         """
         return True
 
+class MessageCallback(Callback):
+    """
+    General callback for a message received via a normal conversation or a
+    group conversation.
+    """
 
-class ChatMessageCallback(Callback):
     def __init__(self, callback, single=True, group=False, offline=False):
-        super(ChatMessageCallback, self).__init__("message", callback)
+        """
+        Construct new message callback
+
+        single -- Include messages from normal conversations
+        group -- Include messages from group conversations
+        offline -- Include offline messages
+        """
+        super(MessageCallback, self).__init__("message", callback)
 
         self.single = single
         self.group = group
@@ -27,10 +40,6 @@ class ChatMessageCallback(Callback):
     def test(self, node):
         # Chat messages only
         if node.get("type") != "chat":
-            return False
-
-        # Messages with body only
-        if not node.has_child("body"):
             return False
 
         # Include group messages or not
@@ -46,4 +55,20 @@ class ChatMessageCallback(Callback):
             if not self.offline:
                 return False
 
-        return True
+        return super(MessageCallback, self).test(node)
+
+class TextMessageCallback(MessageCallback):
+    def test(self, node):
+        # Messages with body only
+        if not node.has_child("body"):
+            return False
+
+        return super(TextMessageCallback, self).test(node)
+
+class MediaMessageCallback(MessageCallback):
+    def test(self, node):
+        # Messages with body only
+        if not node.has_child("media"):
+            return False
+
+        return super(MediaMessageCallback, self).test(node)
