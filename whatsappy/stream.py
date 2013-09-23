@@ -1,7 +1,7 @@
 import sys
 
-from .tokens import str2tok, tok2str
-from .node import Node
+from whatsappy.tokens import str2tok, tok2str
+from whatsappy.node import Node
 
 class MessageIncomplete(Exception):
     pass

@@ -1,2 +1,2 @@
-from .client import Client
-from .node import Node
+from whatsappy.client import Client
+from whatsappy.node import Node

@@ -14,6 +14,7 @@ import logging
 CHATSTATE_NS = "http://jabber.org/protocol/chatstates"
 CHATSTATES = ("active", "inactive", "composing", "paused", "gone")
 
+# Logger instance
 logger = logging.getLogger(__name__)
 
 class Client(object):
@@ -59,17 +60,14 @@ class Client(object):
         last_ex = None
         for i in range(tries):
             family, socktype, proto, canonname, sockaddr = self.addrinfo.pop()
-
-            if self.debug:
-                print >>sys.stderr, "Connecting to %s:%d" % sockaddr
+            logger.debug("Connecting to %s:%d", sockaddr[0], sockaddr[1])
 
             self.socket = socket.socket(family, socktype, proto)
             try:
                 self.socket.connect(sockaddr)
                 break
             except socket.error, ex:
-                if self.debug:
-                    print >>sys.stderr, "Try %d/%d: %s" % (i + 1, tries, ex)
+                logger.debug("Connection attemt failed, try %d/%d: %s", i + 1, tries, ex)
                 last_ex = ex
         else:
             raise last_ex
@@ -79,8 +77,7 @@ class Client(object):
             self.socket.close()
             self.socket = None
 
-        if self.debug:
-            print >>sys.stderr, "Socket Closed"
+        logger.error("Socket closed")
 
         raise ConnectionError()
 
@@ -140,15 +137,14 @@ class Client(object):
                 if (j % 4) == 3:
                     hexstr += " "
 
-            print >>sys.stderr, prefix + " " + hexstr + bytestr
+            print prefix + " " + hexstr + bytestr
 
     def _challenge(self, node):
         encryption = Encryption(self.number, self.secret, node.data)
         self.writer.encrypt = encryption.encrypt
         self.reader.decrypt = encryption.decrypt
 
-        if self.debug:
-            print >>sys.stderr, "Session Key:", encryption.export_key()
+        logger.debug("Session Key: %s", encryption.export_key())
 
         response = Node("response", xmlns="urn:ietf:params:xml:ns:xmpp-sasl",
                         data=encryption.get_response())
@@ -183,15 +179,18 @@ class Client(object):
             self._write(Node("iq", to=self.SERVER, id=node["id"], type="result"))
         elif node["type"] == "result" and iq.name == "query":
             self.messages.append(node)
-        elif self.debug:
-            print >>sys.stderr, "Unknown iq message"
-            print >>sys.stderr, node.toxml(indent="  ") + "\n"
+        else:
+            logger.debug("Unknown iq message received")
+
+            if self.debug:
+                print node.toxml(indent="  ") + "\n"
 
     def _incoming(self):
         nodes = self._read()
 
         for node in nodes:
-            print ">>>", node.name
+            if self.debug:
+                print ">>>", node.name
 
             if node.name == "challenge":
                 self._challenge(node)
@@ -203,7 +202,8 @@ class Client(object):
             elif node.name == "stream:error":
                 raise Exception(node.children[0].name)
 
-            #print str(node)[0:500]
+            if self.debug:
+                print str(node)[0:500]
 
             if node.name in self.callbacks:
                 for callback in self.callbacks[node.name]:
@@ -213,8 +213,8 @@ class Client(object):
             #elif node.name in ("start", "stream:features"):
             #    pass # Not interesting
             #elif self.debug:
-            #    print >>sys.stderr, "Ignorning message"
-            #    print >>sys.stderr, node.toxml(indent="  ") + "\n"
+            #    print "Ignorning message"
+            #    print node.toxml(indent="  ") + "\n"
 
     def _msgid(self):
         return "msg-%d" % (time() * 1000)
@@ -300,8 +300,7 @@ class Client(object):
         self._write(auth)
 
         def on_success(node):
-            if self.debug:
-                print >>sys.stderr, "Logged In!"
+            logger.info("Login attempt successfull")
             self.account_info = node.attributes
 
             presence = Node("presence")

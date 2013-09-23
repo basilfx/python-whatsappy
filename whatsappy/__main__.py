@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 from datetime import date, timedelta
 
-from .client import Client
+from whatsappy.client import Client
 
 import sys, base64
 

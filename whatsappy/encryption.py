@@ -5,7 +5,7 @@ from pbkdf2 import PBKDF2
 from hashlib import md5, sha1
 import hmac
 
-from .rc4 import RC4Engine
+from whatsappy.rc4 import RC4Engine
 
 class Encryption(object):
     """
