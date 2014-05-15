@@ -1,12 +1,14 @@
 class RC4Engine(object):
     """
-    Python port of the RC4 Engine in the Android version of WhatsApp, which
-    seems to be an obfuscated version of the RC4Engine class found in the
-    Bouncy Castle Crypto API (http://bouncycastle.org/java.html)
+    Python port of the RC4 Engine, which seems to be an obfuscated version of
+    the RC4Engine class found in the Bouncy Castle Crypto API
+    (http://bouncycastle.org/java.html)
     """
 
     def __init__(self, key=None):
-        """Initialize the engine. If a key is given, set_key is called."""
+        """
+        Initialize the engine. If a key is given, set_key is called.
+        """
 
         if key is None:
             self.box = None
