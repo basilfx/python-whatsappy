@@ -24,6 +24,8 @@ class MessageCallback(Callback):
     group conversation.
     """
 
+    __slots__ = Callback.__slots__ + ["single", "group", "offline"]
+
     def __init__(self, callback, single=True, group=False, offline=False):
         """
         Construct new message callback
