@@ -6,7 +6,7 @@ The Client uses the [pbkdf2 library](https://www.dlitz.net/software/python-pbkdf
 written by Dwayne C. Litzenberger, which you can install using `pip install pbkdf2`.
 
 ## Usage
-The API is callback driven and very easy to use. See below for a simple example.
+The API is callback driven and easy to use. See below for a simple example.
 
 ```
 import whatsappy
@@ -42,10 +42,13 @@ client.debug = True
 This module does not provide any method to generate a login secret. You should
 provide it yourself, e.g. intercept it from your phone.
 
+## Tests
+The unit tests can be invoked via `python -m unittest discover tests '*.py'`
+
 ## License
 Released under the MIT License
 
-Copyright (C) 2012 Paul Hooijenga (Original author)
+Copyright (C) 2012 Paul Hooijenga (Original author, https://github.com/hackedd)
 Copyright (C) 2014 Bas Stottelaar
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
