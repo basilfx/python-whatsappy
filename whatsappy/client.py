@@ -100,12 +100,15 @@ class Client(object):
         try:
             r, w, x, = select([self.socket], [], [], self.TIMEOUT)
         except socket.error:
+            # Will raise exception
             self._disconnected()
 
         if self.socket in r:
-            # receive any available data, update Reader's buffer
+            # Receive any available data, update Reader's buffer
             buf = self.socket.recv(nbytes)
+
             if not buf:
+                # End of stream
                 self._disconnected()
 
             if self.debug:
@@ -113,7 +116,9 @@ class Client(object):
 
             self.reader.data(buf)
 
+        # Process received nodes
         nodes = []
+
         while True:
             try:
                 node = self.reader.read()
