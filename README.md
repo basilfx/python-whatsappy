@@ -1,9 +1,8 @@
 # python-whatsappy
-A Python API for connecting with the chat protocol.
+An unoffical Python API for connecting with *the* chat protocol.
 
-## Dependencies
-The Client uses the [pbkdf2 library](https://www.dlitz.net/software/python-pbkdf2/)
-written by Dwayne C. Litzenberger, which you can install using `pip install pbkdf2`.
+## Installation
+Clone this repository, and install it via `python setup.py install`.
 
 ## Usage
 The API is callback driven and easy to use. See below for a simple example.
@@ -11,9 +10,8 @@ The API is callback driven and easy to use. See below for a simple example.
 ```
 import whatsappy
 
-# Connecting
+# Create instance
 client = whatsappy.Client(number=<number>, secret=<secret>, nickname=<nickname>)
-client.login()
 
 # Callback
 def on_message(node):
@@ -30,10 +28,13 @@ def on_message(node):
 client.register_callbacks(
     TextMessageCallback(on_message, single=True, group=True, offline=True)
 )
+
+# Start it all
+client.login()
 ```
 
 One can examining of raw messages by turning on debug. Other messages are logged
-via Python's logging functionality.
+via Python's default logger.
 
 ```
 client.debug = True
@@ -49,6 +50,7 @@ The unit tests can be invoked via `python -m unittest discover tests '*.py'`
 Released under the MIT License
 
 Copyright (C) 2012 Paul Hooijenga (Original author, https://github.com/hackedd)
+
 Copyright (C) 2014 Bas Stottelaar
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
