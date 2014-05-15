@@ -10,6 +10,7 @@ from time import time
 import sys
 import socket
 import logging
+import collections
 
 CHATSTATE_NS = "http://jabber.org/protocol/chatstates"
 CHATSTATES = ("active", "inactive", "composing", "paused", "gone")
@@ -41,24 +42,22 @@ class Client(object):
 
         self.debug = False
         self.socket = None
-        self.reader = Reader()
-        self.writer = Writer()
 
-        self.messages = []
+        #self.messages = []
         self.account_info = None
 
         self.last_ping = time()
         self.keep_alive = keep_alive
 
-        self.callbacks = {}
+        self.callbacks = collections.defaultdict(list)
 
-    def _connect(self, tries=3):
+    def _connect(self, attempts=3):
         if not self.addrinfo:
             self.addrinfo = socket.getaddrinfo(self.HOST, self.PORTS[self.portindex], 0, 0, socket.SOL_TCP)
             self.portindex = (self.portindex + 1) % len(self.PORTS)
 
         last_ex = None
-        for i in range(tries):
+        for i in range(attempts):
             family, socktype, proto, canonname, sockaddr = self.addrinfo.pop()
             logger.debug("Connecting to %s:%d", sockaddr[0], sockaddr[1])
 
@@ -66,18 +65,19 @@ class Client(object):
             try:
                 self.socket.connect(sockaddr)
                 break
-            except socket.error, ex:
-                logger.debug("Connection attemt failed, try %d/%d: %s", i + 1, tries, ex)
-                last_ex = ex
+            except socket.error as e:
+                logger.error("Connection failed, attempt %d/%d: %s", i + 1, attempts, e)
+                last_ex = e
         else:
             raise last_ex
 
     def _disconnected(self):
-        if not self.socket is None:
+        if self.socket is not None:
             self.socket.close()
             self.socket = None
 
-        logger.error("Socket closed")
+        self.account_info = None
+        logger.error("Socket closed by remote party")
 
         raise ConnectionError()
 
@@ -90,13 +90,18 @@ class Client(object):
         if self.debug:
             self.dump("    >", buf)
 
-        self.socket.sendall(buf)
+        if self.socket is not None:
+            self.socket.sendall(buf)
 
     def _read(self, nbytes = 4096):
         assert self.socket is not None
 
         # See if there's data available to read
-        r, w, x, = select([self.socket], [], [], self.TIMEOUT)
+        try:
+            r, w, x, = select([self.socket], [], [], self.TIMEOUT)
+        except socket.error:
+            self._disconnected()
+
         if self.socket in r:
             # receive any available data, update Reader's buffer
             buf = self.socket.recv(nbytes)
@@ -177,10 +182,11 @@ class Client(object):
         iq = node.children[0]
         if node["type"] == "get" and iq.name == "ping":
             self._write(Node("iq", to=self.SERVER, id=node["id"], type="result"))
-        elif node["type"] == "result" and iq.name == "query":
-            self.messages.append(node)
+        elif node["type"] == "result": # and iq.name == "query":
+            #self.messages.append(node)
+            pass
         else:
-            logger.debug("Unknown iq message received")
+            logger.debug("Unknown iq message received: %s", node["type"])
 
             if self.debug:
                 print node.toxml(indent="  ") + "\n"
@@ -195,7 +201,7 @@ class Client(object):
             if node.name == "challenge":
                 self._challenge(node)
             elif node.name == "message":
-                self.messages.append(node)
+                #self.messages.append(node)
                 self._received(node)
             elif node.name == "iq":
                 self._iq(node)
@@ -220,9 +226,6 @@ class Client(object):
         return "msg-%d" % (time() * 1000)
 
     def register_callback(self, callback):
-        if callback.name not in self.callbacks:
-            self.callbacks[callback.name] = []
-
         # Add callback to the other callbacks
         self.callbacks[callback.name].append(callback)
 
@@ -267,6 +270,10 @@ class Client(object):
         return called.result
 
     def service_loop(self):
+        # Check for connection error
+        if self.socket is None:
+            self._disconnected()
+
         # Handle incoming data
         self._incoming()
 
@@ -276,8 +283,18 @@ class Client(object):
                 self._ping()
                 self.last_ping = time()
 
-    def login(self):
+    def disconnect(self):
+        if self.socket:
+            self.socket.close()
+
+        self.account_info = None
+        logger.debug("Disconnected by user")
+
+    def connect(self):
         assert self.socket is None
+
+        self.reader = Reader()
+        self.writer = Writer()
 
         self._connect()
 
@@ -300,7 +317,7 @@ class Client(object):
         self._write(auth)
 
         def on_success(node):
-            logger.info("Login attempt successfull")
+            logger.info("Login successfull")
             self.account_info = node.attributes
 
             presence = Node("presence")
@@ -395,6 +412,7 @@ class Client(object):
         media = Node("media", xmlns="urn:xmpp:whatsapp:mms", type="audio",
                      url=url, file=basename, size=size, **attributes)
         msgid, message = self._message(number, media)
+
         self._write(message)
         return msgid
 
@@ -406,6 +424,7 @@ class Client(object):
         media = Node("media", xmlns="urn:xmpp:whatsapp:mms", type="location",
                      latitude=latitude, longitude=longitude)
         msgid, message = self._message(number, media)
+
         self._write(message)
         return msgid
 
@@ -419,5 +438,6 @@ class Client(object):
         vcard["name"] = name
         media = Node("media", children=[vcard], xmlns="urn:xmpp:whatsapp:mms",
                      type="vcard", encoding="text")
+
         msgid, message = self._message(number, media)
         return msgid
