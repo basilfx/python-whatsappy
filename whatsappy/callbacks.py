@@ -1,9 +1,10 @@
 class Callback(object):
+    __slots__ = ["name", "callback", "called", "result"]
+
     def __init__(self, name, callback):
         self.name = name
         self.callback = callback
         self.called = 0
-        self.result = None
 
     def apply(self, node):
         self.result = self.callback(node)
