@@ -13,8 +13,8 @@ ENCRYPTED_IN  = 0x8
 ENCRYPTED_OUT = 0x1
 
 class Reader(object):
-    def __init__(self, buf = ""):
-        self.buf = buf
+    def __init__(self, buf = None):
+        self.buf = buf or bytes()
         self.offset = 0
         self.decrypt = None
 
@@ -265,7 +265,7 @@ class Writer(object):
             return self.bytes(string)
 
     def attributes(self, attributes):
-        buf = ""
+        buf = bytes()
         for key, value in attributes.iteritems():
             buf += self.string(key)
             buf += self.string(value)
