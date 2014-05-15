@@ -1,23 +1,27 @@
-import unittest
+from whatsappy.rc4 import RC4Engine
 
 from hashlib import sha1
-import os
 
-from ..rc4 import RC4Engine
+import unittest
+import os
 
 KEY = os.urandom(20)
 
 class RC4Test(unittest.TestCase):
     def test_key(self):
-        """Test if the constructor correctly calls setKey"""
+        """
+        Test if the constructor correctly calls set_key
+        """
+
         a = RC4Engine(KEY)
         b = RC4Engine()
-        b.setKey(KEY)
+        b.set_key(KEY)
         self.assertEqual(a.box, b.box)
 
     def test_encryption(self):
-        """Test encryption by encrypting some test vectors from Wikipedia
-           (http://en.wikipedia.org/wiki/RC4#Test_vectors)
+        """
+        Test encryption by encrypting some test vectors from Wikipedia
+        (http://en.wikipedia.org/wiki/RC4#Test_vectors)
         """
 
         tests = [("Key", "Plaintext", "BBF316E8D940AF0AD3"),
