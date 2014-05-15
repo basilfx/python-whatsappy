@@ -2,6 +2,7 @@ from whatsappy.stream import Reader, Writer, MessageIncomplete, EndOfStream
 from whatsappy.encryption import Encryption
 from whatsappy.callbacks import Callback
 from whatsappy.node import Node
+
 from whatsappy.exceptions import ConnectionError
 
 from select import select
