@@ -2,7 +2,7 @@ from whatsappy.stream import Reader, Writer, MessageIncomplete, EndOfStream
 from whatsappy.encryption import Encryption
 from whatsappy.callbacks import Callback
 from whatsappy.node import Node
-from whatsappy.exceptions import ConnectionError
+from whatsappy.exceptions import ConnectionError, LoginError
 
 from select import select
 from time import time
@@ -105,7 +105,11 @@ class Client(object):
 
         if self.socket in r:
             # Receive any available data, update Reader's buffer
-            buf = self.socket.recv(nbytes)
+            try:
+                buf = self.socket.recv(nbytes)
+            except socket.error:
+                # E.g. connectin reset by remote peer.
+                buf = None
 
             if not buf:
                 # End of stream
@@ -291,6 +295,7 @@ class Client(object):
     def disconnect(self):
         if self.socket:
             self.socket.close()
+            self.socket = None
 
         self.account_info = None
         logger.debug("Disconnected by user")
@@ -333,8 +338,9 @@ class Client(object):
         callback = Callback("success", on_success)
         self.register_callback_and_wait(callback)
 
-        # Done
-        return self.account_info != None
+        # Raise an exception in case credentials are wronge
+        if self.account_info is None:
+            raise LoginError("Incorrect number and/or secret")
 
     def last_seen(self, number):
         msgid = self._msgid()
