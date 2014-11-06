@@ -1,12 +1,29 @@
 class Callback(object):
-    __slots__ = ["name", "callback", "called", "result"]
+    """
+    General callback for received nodes.
+    """
+
+    __slots__ = ("name", "callback", "called", "result")
 
     def __init__(self, name, callback):
+        """
+        Construct a new callback.
+
+        name -- Name of the callback.
+        callback -- Function to execute
+        """
+
         self.name = name
         self.callback = callback
         self.called = 0
 
-    def apply(self, node):
+    def __call__(self, node):
+        """
+        Run the callback with a given node.
+
+        node -- The node to pass on
+        """
+
         self.result = self.callback(node)
         self.called += 1
 
@@ -16,15 +33,38 @@ class Callback(object):
 
         node -- The node to check
         """
+
         return True
+
+class PresenceCallback(Callback):
+    """
+    Callback for presence notifications.
+    """
+
+    __slots__ = Callback.__slots__ + ("online", "offline")
+
+    def __init__(self, callback, online=True, offline=False):
+        """
+        Constructy a new presence callback
+
+        online -- When user comes online
+        offline -- When user goes offline
+        """
+        super(PresenceCallback, self).__init__("message", callback)
+
+        self.online = online
+        self.offline = offline
+
+    def test(self, node):
+        pass
 
 class MessageCallback(Callback):
     """
-    General callback for a message received via a normal conversation or a
-    group conversation.
+    Callback for message notifications, either single conversation messages or
+    group conversation messages.
     """
 
-    __slots__ = Callback.__slots__ + ["single", "group", "offline"]
+    __slots__ = Callback.__slots__ + ("single", "group", "offline")
 
     def __init__(self, callback, single=True, group=False, offline=False):
         """
@@ -54,13 +94,18 @@ class MessageCallback(Callback):
                 return False
 
         # Include offline messages or not
-        if node.has_child("offline"):
-            if not self.offline:
-                return False
+        if not self.offline and node.has_child("offline"):
+            return False
 
         return super(MessageCallback, self).test(node)
 
 class TextMessageCallback(MessageCallback):
+    """
+    Message callback, specific for text-only messages.
+    """
+
+    __slots__ = MessageCallback.__slots__
+
     def test(self, node):
         # Messages with body only
         if not node.has_child("body"):
@@ -69,8 +114,14 @@ class TextMessageCallback(MessageCallback):
         return super(TextMessageCallback, self).test(node)
 
 class MediaMessageCallback(MessageCallback):
+    """
+    Message callback, specific for media-only messages.
+    """
+
+    __slots__ = MessageCallback.__slots__
+
     def test(self, node):
-        # Messages with body only
+        # Messages with media only
         if not node.has_child("media"):
             return False
 

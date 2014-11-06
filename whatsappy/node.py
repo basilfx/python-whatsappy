@@ -47,7 +47,7 @@ class Node(MutableMapping):
     def has_child(self, name):
         return self.child(name) != None
 
-    def toxml(self, indent=""):
+    def to_xml(self, indent=""):
         xml = indent + "<" + self.name
         for name in sorted(self.attributes.keys()):
             xml += " " + str(name) + "=\"" + self.escape(self.attributes[name]) + "\""
@@ -59,7 +59,7 @@ class Node(MutableMapping):
         if self.children:
             xml += "\n"
             for child in self.children:
-                xml += child.toxml(indent + "  ") + "\n"
+                xml += child.to_xml(indent + "  ") + "\n"
             xml += indent
 
         xml += "</" + self.name + ">"
@@ -81,7 +81,7 @@ class Node(MutableMapping):
         return "".join(map(escape_char, string))
 
     def __str__(self):
-        return self.toxml()
+        return self.to_xml()
 
     def __repr__(self):
         return "<%s (%d)>" % (self.name, len(self.children))

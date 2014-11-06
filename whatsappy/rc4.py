@@ -25,7 +25,7 @@ class RC4Engine(object):
         self.y = 0
 
         j = 0
-        for i in range(256):
+        for i in xrange(256):
             j = (j + self.box[i] + ord(key[i % len(key)])) % 256
             self.box[i], self.box[j] = self.box[j], self.box[i]
 

@@ -15,35 +15,34 @@ import collections
 CHATSTATE_NS = "http://jabber.org/protocol/chatstates"
 CHATSTATES = ("active", "inactive", "composing", "paused", "gone")
 
+# Remote server settings
+HOST = "c.whatsapp.net"
+PORT = 443
+
+# Protocol settings
+PROTOCOL_DEVICE = "Android"
+PROTOCOL_VERSION = "2.11.378";
+PROTOCOL_USER_AGENT = "WhatsApp/2.11.378 Android/4.2 Device/GalaxyS3"
+
+# Other settings
+TIMEOUT = 0.1
+PING_INTERVAL = 30
+
 # Logger instance
 logger = logging.getLogger(__name__)
 
 class Client(object):
-    HOST = "c.whatsapp.net"
-    PORTS = [443, 5222]
-    TIMEOUT = 0.1 # seconds
-
     SERVER = "s.whatsapp.net"
-    REALM = "s.whatsapp.net"
     GROUPHOST = "g.us"
-    DIGEST_URI = "xmpp/s.whatsapp.net"
-
-    VERSION = "Android-2.8.5732"
-
-    PING_INTERVAL = 30 # seconds
 
     def __init__(self, number, secret, nickname=None, keep_alive=True):
         self.number = number
         self.secret = secret
         self.nickname = nickname
 
-        self.addrinfo = None
-        self.portindex = 0
-
         self.debug = False
         self.socket = None
 
-        #self.messages = []
         self.account_info = None
 
         self.last_ping = time()
@@ -51,25 +50,15 @@ class Client(object):
 
         self.callbacks = collections.defaultdict(list)
 
-    def _connect(self, attempts=3):
-        if not self.addrinfo:
-            self.addrinfo = socket.getaddrinfo(self.HOST, self.PORTS[self.portindex], 0, 0, socket.SOL_TCP)
-            self.portindex = (self.portindex + 1) % len(self.PORTS)
+    def _connect(self):
+        logger.info("Connecting to %s:%d", HOST, PORT)
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        last_ex = None
-        for i in range(attempts):
-            family, socktype, proto, canonname, sockaddr = self.addrinfo.pop()
-            logger.debug("Connecting to %s:%d", sockaddr[0], sockaddr[1])
-
-            self.socket = socket.socket(family, socktype, proto)
-            try:
-                self.socket.connect(sockaddr)
-                break
-            except socket.error as e:
-                logger.error("Connection failed, attempt %d/%d: %s", i + 1, attempts, e)
-                last_ex = e
-        else:
-            raise last_ex
+        try:
+            self.socket.connect((HOST, PORT))
+        except socket.error as e:
+            logger.error("Unable to connect: %s", e)
+            raise ConnectionError("Unable to connect to remote server")
 
     def _disconnected(self):
         if self.socket is not None:
@@ -77,42 +66,38 @@ class Client(object):
             self.socket = None
 
         self.account_info = None
-        logger.error("Socket closed by remote party")
 
-        raise ConnectionError()
+        logger.error("Socket closed by remote party")
+        raise ConnectionError("Socket closed by remote party")
 
     def _write(self, buf, encrypt=None):
         if isinstance(buf, Node):
             if self.debug:
-                sys.stderr.write(buf.toxml(indent="xml > ") + "\n")
+                print buf.to_xml(indent="xml > ")
             buf = self.writer.node(buf, encrypt)
 
         if self.debug:
             self.dump("    >", buf)
 
-        if self.socket is not None:
+        if self.socket:
             self.socket.sendall(buf)
 
-    def _read(self, nbytes = 4096):
-        assert self.socket is not None
-
-        # See if there's data available to read
+    def _read(self, limit=4096):
+        # See if there's data available to read.
         try:
-            r, w, x, = select([self.socket], [], [], self.TIMEOUT)
-        except socket.error:
-            # Will raise exception
+            r, w, x, = select([self.socket], [], [], TIMEOUT)
+        except (TypeError, socket.error):
             self._disconnected()
 
         if self.socket in r:
             # Receive any available data, update Reader's buffer
             try:
-                buf = self.socket.recv(nbytes)
+                buf = self.socket.recv(limit)
             except socket.error:
-                # E.g. connectin reset by remote peer.
                 buf = None
 
+            # Check for end of stream
             if not buf:
-                # End of stream
                 self._disconnected()
 
             if self.debug:
@@ -126,14 +111,17 @@ class Client(object):
         while True:
             try:
                 node = self.reader.read()
+
                 if self.debug:
-                    sys.stderr.write(node.toxml(indent="xml < ") + "\n")
+                    print node.to_xml(indent="xml < ")
                 nodes.append(node)
             except MessageIncomplete:
                 break
             except EndOfStream:
                 self._disconnected()
                 break
+
+        # Return complete nodes
         return nodes
 
     def dump(self, prefix, bytes):
@@ -155,13 +143,14 @@ class Client(object):
 
     def _challenge(self, node):
         encryption = Encryption(self.number, self.secret, node.data)
+        logger.debug("Session Key: %s", encryption.export_key())
+
         self.writer.encrypt = encryption.encrypt
         self.reader.decrypt = encryption.decrypt
 
-        logger.debug("Session Key: %s", encryption.export_key())
-
         response = Node("response", xmlns="urn:ietf:params:xml:ns:xmpp-sasl",
                         data=encryption.get_response())
+
         self._write(response, encrypt=False)
         self._incoming()
 
@@ -198,7 +187,7 @@ class Client(object):
             logger.debug("Unknown iq message received: %s", node["type"])
 
             if self.debug:
-                print node.toxml(indent="  ") + "\n"
+                print node.to_xml(indent="  ") + "\n"
 
     def _incoming(self):
         nodes = self._read()
@@ -223,13 +212,13 @@ class Client(object):
             if node.name in self.callbacks:
                 for callback in self.callbacks[node.name]:
                     if callback.test(node):
-                        callback.apply(node)
+                        callback(node)
 
             #elif node.name in ("start", "stream:features"):
             #    pass # Not interesting
             #elif self.debug:
             #    print "Ignorning message"
-            #    print node.toxml(indent="  ") + "\n"
+            #    print node.to_xml(indent="  ") + "\n"
 
     def _msgid(self):
         return "msg-%d" % (time() * 1000)
@@ -279,16 +268,12 @@ class Client(object):
         return called.result
 
     def service_loop(self):
-        # Check for connection error
-        if self.socket is None:
-            self._disconnected()
-
         # Handle incoming data
         self._incoming()
 
         # Send a ping once in a while if keep alive and still connected
         if self.keep_alive:
-            if (time() - self.last_ping) > self.PING_INTERVAL:
+            if (time() - self.last_ping) > PING_INTERVAL:
                 self._ping()
                 self.last_ping = time()
 
@@ -308,22 +293,20 @@ class Client(object):
 
         self._connect()
 
-        buf = self.writer.start_stream(self.SERVER, self.VERSION)
+        buf = self.writer.start_stream(self.SERVER, "%s-%s" %
+            (PROTOCOL_DEVICE, PROTOCOL_VERSION))
         self._write(buf)
 
         features = Node("stream:features")
-        features.add(Node("receipt_acks"))
-        features.add(Node("w:profile:picture", type="all"))
-        features.add(Node("status"))
-
-        # m1.java:48
-        features.add(Node("notification", type="participant"))
-        features.add(Node("groups"))
-
+        #features.add(Node("receipt_acks"))
+        #features.add(Node("w:profile:picture", type="all"))
+        #features.add(Node("status"))
+        #features.add(Node("notification", type="participant"))
+        #features.add(Node("groups"))
         self._write(features)
 
         auth = Node("auth", xmlns="urn:ietf:params:xml:ns:xmpp-sasl",
-                    mechanism="WAUTH-1", user=self.number)
+            mechanism="WAUTH-1", user=self.number)
         self._write(auth)
 
         def on_success(node):
@@ -390,7 +373,7 @@ class Client(object):
         if state not in CHATSTATES:
             raise Exception("Invalid chatstate: %r" % state)
 
-        node = Node(state, xmlns = CHATSTATE_NS)
+        node = Node(state, xmlns=CHATSTATE_NS)
         msgid, message = self._message(number, node)
         self._write(message)
         return msgid
@@ -414,11 +397,11 @@ class Client(object):
 
     def audio(self, number, url, basename, size, attributes):
         valid_attributes = ("abitrate", "acodec", "asampfmt", "asampfreq",
-                            "duration", "encoding", "filehash", "mimetype")
+            "duration", "encoding", "filehash", "mimetype")
 
         for name, value in attributes.iteritems:
             if name not in valid_attributes:
-                raise Exception("Unknown audio attribute: %r" % name)
+                raise ValueError("Unknown audio attribute: %r" % name)
 
         media = Node("media", xmlns="urn:xmpp:whatsapp:mms", type="audio",
                      url=url, file=basename, size=size, **attributes)
@@ -433,7 +416,7 @@ class Client(object):
         """
 
         media = Node("media", xmlns="urn:xmpp:whatsapp:mms", type="location",
-                     latitude=latitude, longitude=longitude)
+            latitude=latitude, longitude=longitude)
         msgid, message = self._message(number, media)
 
         self._write(message)
@@ -441,14 +424,16 @@ class Client(object):
 
     def vcard(self, number, name, data):
         """
-        Send a vCard to a contact. WhatsApp will display the PHOTO if it is
-        embedded in the vCard data (as Base64 encoded JPEG).
+        Send a vCard to a contact. WhatsApp will display the photo if it is
+        embedded in the vCard data as base64 encoded JPEG.
         """
 
         vcard = Node("vcard", data=data)
         vcard["name"] = name
-        media = Node("media", children=[vcard], xmlns="urn:xmpp:whatsapp:mms",
-                     type="vcard", encoding="text")
 
+        media = Node("media", children=[vcard], xmlns="urn:xmpp:whatsapp:mms",
+            type="vcard", encoding="text")
         msgid, message = self._message(number, media)
+
+        self._write(message)
         return msgid

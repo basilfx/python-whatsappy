@@ -13,7 +13,7 @@ ENCRYPTED_IN  = 0x8
 ENCRYPTED_OUT = 0x1
 
 class Reader(object):
-    def __init__(self, buf = None):
+    def __init__(self, buf=None):
         self.buf = buf or bytes()
         self.offset = 0
         self.decrypt = None
@@ -161,7 +161,6 @@ class Reader(object):
             raise Exception("Unknown string token '%02x'" % ord(token))
 
 class Writer(object):
-    VERSION = 1, 2
 
     def __init__(self):
         self.encrypt = None
@@ -169,7 +168,7 @@ class Writer(object):
     def start_stream(self, domain, resource):
         attributes = { "to": domain, "resource": resource }
 
-        buf = "WA%c%c" % self.VERSION
+        buf = "WA%c%c" % (1, 2)
 
         buf += "\x00\x00\x18"
 
