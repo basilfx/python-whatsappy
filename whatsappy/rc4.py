@@ -5,22 +5,12 @@ class RC4Engine(object):
     (http://bouncycastle.org/java.html)
     """
 
-    def __init__(self, key=None):
+    def __init__(self, key):
         """
         Initialize the engine. If a key is given, set_key is called.
         """
 
-        if key is None:
-            self.box = None
-            self.working_key = None
-            self.x = 0
-            self.y = 0
-        else:
-            self.set_key(key)
-
-    def set_key(self, key):
         self.box = range(256)
-        self.working_key = key
         self.x = 0
         self.y = 0
 
@@ -30,12 +20,14 @@ class RC4Engine(object):
             self.box[i], self.box[j] = self.box[j], self.box[i]
 
     def process_bytes(self, data):
-        assert self.working_key is not None
-
         out = []
-        for char in data:
+
+        for d in data:
             self.x = (self.x + 1) % 256
             self.y = (self.y + self.box[self.x]) % 256
+
             self.box[self.x], self.box[self.y] = self.box[self.y], self.box[self.x]
-            out.append(chr(ord(char) ^ self.box[(self.box[self.x] + self.box[self.y]) % 256]))
+
+            out.append(chr( ord(d) ^ self.box[(self.box[self.x] + self.box[self.y]) % 256] ))
+
         return "".join(out)

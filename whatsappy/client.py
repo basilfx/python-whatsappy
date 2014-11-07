@@ -142,14 +142,14 @@ class Client(object):
             print prefix + " " + hexstr + bytestr
 
     def _challenge(self, node):
-        encryption = Encryption(self.number, self.secret, node.data)
-        logger.debug("Session Key: %s", encryption.export_key())
+        encryption = Encryption(self.secret, node.data)
+        logger.debug("Session Keys: %s", [ key.encode("hex") for key in encryption.keys ])
 
         self.writer.encrypt = encryption.encrypt
         self.reader.decrypt = encryption.decrypt
 
         response = Node("response", xmlns="urn:ietf:params:xml:ns:xmpp-sasl",
-                        data=encryption.get_response())
+                        data=encryption.authenticate(self.number))
 
         self._write(response, encrypt=False)
         self._incoming()
@@ -293,8 +293,8 @@ class Client(object):
 
         self._connect()
 
-        buf = self.writer.start_stream(self.SERVER, "%s-%s" %
-            (PROTOCOL_DEVICE, PROTOCOL_VERSION))
+        buf = self.writer.start_stream(self.SERVER, "%s-%s-%d" %
+            (PROTOCOL_DEVICE, PROTOCOL_VERSION, PORT))
         self._write(buf)
 
         features = Node("stream:features")
@@ -306,7 +306,7 @@ class Client(object):
         self._write(features)
 
         auth = Node("auth", xmlns="urn:ietf:params:xml:ns:xmpp-sasl",
-            mechanism="WAUTH-1", user=self.number)
+            mechanism="WAUTH-2", user=self.number)
         self._write(auth)
 
         def on_success(node):

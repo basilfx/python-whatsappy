@@ -22,15 +22,15 @@ def on_message(node):
     print "%s: %s" % (sender, message)
 
     # Reply
-    client.message(receiver, message)
+    client.message(sender, message)
 
 # Register callback
 client.register_callbacks(
-    TextMessageCallback(on_message, single=True, group=True, offline=True)
+    whatsappy.TextMessageCallback(on_message, single=True, group=True, offline=True)
 )
 
 # Start it all
-client.login()
+client.connect()
 ```
 
 One can examining of raw messages by turning on debug. Other messages are logged

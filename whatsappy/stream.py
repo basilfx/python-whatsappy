@@ -38,14 +38,13 @@ class Reader(object):
         if len(self.buf) <= 2:
             raise MessageIncomplete()
 
-        length = self.peek_int24()
-        flags  = (length & 0x00F00000) >> 20
-        length = (length & 0x000FFFFF)
+        first_byte = self.int8()
 
-        if length + 3 > len(self.buf):
+        flags = (first_byte & 0xF0) >> 4
+        length = self.int16() | ((first_byte & 0x0F) << 16)
+
+        if length > len(self.buf):
             raise MessageIncomplete()
-
-        self.int24()
 
         if flags & ENCRYPTED_IN:
             return self._read_encrypted(length)
@@ -168,9 +167,8 @@ class Writer(object):
     def start_stream(self, domain, resource):
         attributes = { "to": domain, "resource": resource }
 
-        buf = "WA%c%c" % (1, 2)
-
-        buf += "\x00\x00\x18"
+        # Version 1.4
+        buf = "WA\x01\x04\x00\x00\x1c"
 
         buf += self.list_start(len(attributes) * 2 + 1)
         buf += "\x01"
@@ -189,7 +187,12 @@ class Writer(object):
 
         if encrypt:
             buf = self.encrypt(buf)
-            header = self.int24(ENCRYPTED_OUT << 20 | len(buf))
+
+            first = (8 << 4) | ((len(buf) & 16711680) >> 16)
+            second = (len(buf) & 65280) >> 8
+            third = len(buf) & 255
+
+            header = self.int24((first << 16) | (second << 8) | third)
         else:
             header = self.int24(len(buf))
 
@@ -252,11 +255,13 @@ class Writer(object):
         return leader + string
 
     def string(self, string):
-        if not isinstance(string, basestring):
-            string = str(string)
         token = str2tok(string)
+
         if token is not None:
-            return self.token(token)
+            if token > 0xEB:
+                return self.token(0xEC) + self.token(token - 0xED)
+            else:
+                return self.token(token)
         elif "@" in string:
             user, at, server = string.partition("@")
             return self.jid(user, server)
@@ -278,4 +283,4 @@ class Writer(object):
         else:
             # XXX: PHP Code says "\xf9" . chr($len), chr seems to wrap
             # TODO: Find out if this is correct / intentional
-            return "\xF9" + chr(length & 0xFF)
+            return "\xF9" + self.int16(length)
