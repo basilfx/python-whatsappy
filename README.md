@@ -13,7 +13,7 @@ import whatsappy
 # Create instance
 client = whatsappy.Client(number=<number>, secret=<secret>, nickname=<nickname>)
 
-# Callback
+# Callback handlers
 def on_message(node):
     message = node.child("body").data
     sender = node["from"]
@@ -24,9 +24,14 @@ def on_message(node):
     # Reply
     client.message(sender, message)
 
-# Register callback
-client.register_callbacks(
-    whatsappy.TextMessageCallback(on_message, single=True, group=True, offline=True)
+def on_presence(node):
+    print "%s is %s" % (node.get("from"), node.get("type", "online"))
+
+# Register callbacks
+client.register_callback(
+    whatsappy.TextMessageCallback(on_message, single=True, group=True,
+        offline=False),
+    whatsappy.PresenceCallback(on_presence, online=True, offline=True)
 )
 
 # Start it all
