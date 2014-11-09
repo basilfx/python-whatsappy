@@ -1,6 +1,7 @@
 from whatsappy.stream import Reader, Writer, MessageIncomplete, EndOfStream
 from whatsappy.encryption import Encryption
-from whatsappy.callbacks import Callback, LoginSuccessCallback, LoginFailedCallback
+from whatsappy.callbacks import Callback, LoginSuccessCallback, \
+    LoginFailedCallback
 from whatsappy.node import Node
 from whatsappy.exceptions import ConnectionError, StreamError, LoginError
 from whatsappy import utils
