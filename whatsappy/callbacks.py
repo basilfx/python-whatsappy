@@ -82,7 +82,7 @@ class MessageCallback(Callback):
 
     def test(self, node):
         # Chat messages only
-        if node.get("type") != "chat":
+        if node.get("type") != "text":
             return False
 
         # Include group messages or not

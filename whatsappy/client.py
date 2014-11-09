@@ -8,7 +8,6 @@ from whatsappy import utils
 from select import select
 from time import time
 
-import sys
 import socket
 import logging
 import collections
@@ -27,7 +26,7 @@ PROTOCOL_USER_AGENT = "WhatsApp/2.11.378 Android/4.2 Device/GalaxyS3"
 
 # Other settings
 TIMEOUT = 0.1
-PING_INTERVAL = 45
+PING_INTERVAL = 30
 
 # Logger instance
 logger = logging.getLogger(__name__)
@@ -36,10 +35,12 @@ class Client(object):
     SERVER = "s.whatsapp.net"
     GROUPHOST = "g.us"
 
-    def __init__(self, number, secret, nickname=None, keep_alive=True):
+    def __init__(self, number, secret, nickname=None):
         self.number = number
         self.secret = secret
         self.nickname = nickname
+
+        self.auto_receipt = True
 
         self.debug = False
         self.socket = None
@@ -48,7 +49,6 @@ class Client(object):
         self.counter = 0
 
         self.last_ping = time()
-        self.keep_alive = keep_alive
 
         self.callbacks = collections.defaultdict(list)
 
@@ -154,15 +154,6 @@ class Client(object):
 
         self._write(message)
 
-    def _received(self, node):
-        request = node.child("request")
-        if request is None or request["xmlns"] != "urn:xmpp:receipts":
-            return
-
-        message = Node("message", to=node["from"], id=node["id"], type="chat")
-        message.add(Node("received", xmlns="urn:xmpp:receipts"))
-
-        self._write(message)
 
     def _iq(self, node):
         # Node without children could be a ping reply
@@ -203,7 +194,8 @@ class Client(object):
             if node.name == "challenge":
                 self._challenge(node)
             elif node.name == "message":
-                self._received(node)
+                if self.auto_receipt:
+                    self._receipt(node)
             elif node.name == "ib":
                 self._ib(node)
             elif node.name == "iq":
@@ -260,11 +252,10 @@ class Client(object):
         self._incoming()
 
         # Send a ping once in a while if keep alive and still connected
-        if self.keep_alive:
-            if (time() - self.last_ping) > PING_INTERVAL:
-                #self._ping()
-                self.presence("active")
-                self.last_ping = time()
+        if (time() - self.last_ping) > PING_INTERVAL:
+            #self._ping()
+            self.presence("active")
+            self.last_ping = time()
 
     def disconnect(self):
         self._disconnect()
@@ -341,6 +332,10 @@ class Client(object):
         message.add(node)
 
         return msgid, message
+
+    def _receipt(self, node):
+        self._write(Node("receipt", type="read", to=node["from"], id=node["id"],
+            t=str(time())))
 
     def message(self, number, text):
         msgid, message = self._message(number, Node("body", data=text))
