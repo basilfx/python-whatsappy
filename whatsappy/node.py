@@ -8,11 +8,17 @@ XML_ENT = {
 }
 
 class Node(MutableMapping):
-    def __init__(self, name, data=None, children=None, **attributes):
-        self.name = name
+    def __init__(self, tag, data=None, children=None, **kwargs):
+        """
+        Construct a new node. Any kwargs are assumed to be attributes, therefore
+        the arguments are accessed trough 'args'.
+        """
+
+        self.name = tag
         self.data = data
         self.children = children if children else []
-        self.attributes = attributes
+
+        self.attributes = kwargs
 
     def __iter__(self):
         return iter(self.attributes)
@@ -38,6 +44,9 @@ class Node(MutableMapping):
     def add(self, child):
         self.children.append(child)
 
+    def remove(self, child):
+        self.children.remove(child)
+
     def child(self, name):
         for child in self.children:
             if child.name == name:
@@ -45,25 +54,7 @@ class Node(MutableMapping):
         return None
 
     def has_child(self, name):
-        return self.child(name) != None
-
-    def to_xml(self, indent=""):
-        xml = indent + "<" + self.name
-        for name in sorted(self.attributes.keys()):
-            xml += " " + str(name) + "=\"" + self.escape(self.attributes[name]) + "\""
-        xml += ">"
-
-        if self.data:
-            xml += self.escape(self.data)
-
-        if self.children:
-            xml += "\n"
-            for child in self.children:
-                xml += child.to_xml(indent + "  ") + "\n"
-            xml += indent
-
-        xml += "</" + self.name + ">"
-        return xml
+        return self.child(name) is not None
 
     def escape(self, string):
         def escape_char(c):
@@ -82,6 +73,31 @@ class Node(MutableMapping):
 
     def __str__(self):
         return self.to_xml()
+
+    def to_xml(self, indent=0, level=0):
+        prefix = (indent * level) * " "
+
+        # Opening tag + attributes
+        xml = "%s<%s" % (prefix, self.name)
+
+        for attribute, value in self.attributes.iteritems():
+            xml += " %s=\"%s\"" % (attribute, self.escape(value))
+
+        xml += ">\n"
+
+        # Data
+        if self.data:
+            xml += "%s%s\n" % (prefix, self.escape(self.data))
+
+        # Children
+        for child in self.children:
+            child = child.to_xml(indent=indent, level=level + 1)
+            xml += "%s%s\n" % (prefix, child)
+
+        # Closing tag
+        xml += "%s</%s>" % (prefix, self.name)
+
+        return xml
 
     def __repr__(self):
         return "<%s (%d)>" % (self.name, len(self.children))

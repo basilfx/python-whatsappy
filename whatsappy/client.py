@@ -2,7 +2,8 @@ from whatsappy.stream import Reader, Writer, MessageIncomplete, EndOfStream
 from whatsappy.encryption import Encryption
 from whatsappy.callbacks import Callback
 from whatsappy.node import Node
-from whatsappy.exceptions import ConnectionError, LoginError
+from whatsappy.exceptions import ConnectionError, StreamError, LoginError
+from whatsappy import utils
 
 from select import select
 from time import time
@@ -26,7 +27,7 @@ PROTOCOL_USER_AGENT = "WhatsApp/2.11.378 Android/4.2 Device/GalaxyS3"
 
 # Other settings
 TIMEOUT = 0.1
-PING_INTERVAL = 30
+PING_INTERVAL = 45
 
 # Logger instance
 logger = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ class Client(object):
         self.socket = None
 
         self.account_info = None
+        self.counter = 0
 
         self.last_ping = time()
         self.keep_alive = keep_alive
@@ -57,30 +59,34 @@ class Client(object):
         try:
             self.socket.connect((HOST, PORT))
         except socket.error as e:
-            logger.error("Unable to connect: %s", e)
             raise ConnectionError("Unable to connect to remote server")
 
-    def _disconnected(self):
+    def _disconnect(self):
         if self.socket is not None:
             self.socket.close()
             self.socket = None
 
         self.account_info = None
+        self.counter = 0
 
-        logger.error("Socket closed by remote party")
+    def _disconnected(self):
+        self._disconnect()
         raise ConnectionError("Socket closed by remote party")
 
     def _write(self, buf, encrypt=None):
         if isinstance(buf, Node):
             if self.debug:
-                print buf.to_xml(indent="xml > ")
+                print utils.dump_xml(buf, prefix="xml > ")
+
             buf = self.writer.node(buf, encrypt)
 
         if self.debug:
-            self.dump("    >", buf)
+            print utils.dump_bytes(buf, prefix=">>>   ")
 
-        if self.socket:
+        try:
             self.socket.sendall(buf)
+        except socket.error:
+            self._disconnected()
 
     def _read(self, limit=4096):
         # See if there's data available to read.
@@ -101,7 +107,7 @@ class Client(object):
                 self._disconnected()
 
             if self.debug:
-                self.dump("    <", buf)
+                print utils.dump_bytes(buf, prefix="<<<   ")
 
             self.reader.data(buf)
 
@@ -113,7 +119,8 @@ class Client(object):
                 node = self.reader.read()
 
                 if self.debug:
-                    print node.to_xml(indent="xml < ")
+                    print utils.dump_xml(node, prefix="xml < ")
+
                 nodes.append(node)
             except MessageIncomplete:
                 break
@@ -124,23 +131,6 @@ class Client(object):
         # Return complete nodes
         return nodes
 
-    def dump(self, prefix, bytes):
-        length = len(bytes)
-        for i in range(0, length, 16):
-            hexstr = bytestr = ""
-            for j in range(0, 16):
-                if i + j < length:
-                    b = ord(bytes[i + j])
-                    hexstr  += "%02x " % b
-                    bytestr += bytes[i + j] if 0x20 <= b < 0x7F else "."
-                else:
-                    hexstr  += "   "
-
-                if (j % 4) == 3:
-                    hexstr += " "
-
-            print prefix + " " + hexstr + bytestr
-
     def _challenge(self, node):
         encryption = Encryption(self.secret, node.data)
         logger.debug("Session Keys: %s", [ key.encode("hex") for key in encryption.keys ])
@@ -148,14 +138,16 @@ class Client(object):
         self.writer.encrypt = encryption.encrypt
         self.reader.decrypt = encryption.decrypt
 
+        response = "%s%s%d" % (self.number, node.data, time())
+
         response = Node("response", xmlns="urn:ietf:params:xml:ns:xmpp-sasl",
-                        data=encryption.authenticate(self.number))
+            data=encryption.encrypt(response, False))
 
         self._write(response, encrypt=False)
         self._incoming()
 
     def _ping(self):
-        msgid = self._msgid()
+        msgid = self._msgid("ping_")
 
         message = Node("iq", id=msgid, type="get", to=self.SERVER)
         message.add(Node("ping", xmlns="w:p"))
@@ -186,72 +178,67 @@ class Client(object):
         else:
             logger.debug("Unknown iq message received: %s", node["type"])
 
-            if self.debug:
-                print node.to_xml(indent="  ") + "\n"
+    def _clear_dirty(self, *categories):
+        nodes = []
+
+        for category in categories:
+            nodes.append(Node("clean", type=category))
+
+        self._write(Node("iq", id=self._msgid("cleardirty"), type="set",
+            to=self.SERVER, xmlns="urn:xmpp:whatsapp:dirty", children=nodes))
+
+    def _ib(self, node):
+        for child in node.children:
+            if child.name == "dirty":
+                self._clear_dirty(child["type"])
+            elif child.name == "offline":
+                pass
+            else:
+                logger.debug("No 'ib' handler for %s implemented", child.name)
 
     def _incoming(self):
         nodes = self._read()
 
         for node in nodes:
-            if self.debug:
-                print ">>>", node.name
-
             if node.name == "challenge":
                 self._challenge(node)
             elif node.name == "message":
-                #self.messages.append(node)
                 self._received(node)
+            elif node.name == "ib":
+                self._ib(node)
             elif node.name == "iq":
                 self._iq(node)
+            elif node.name in ("start", "stream:features"):
+                pass
             elif node.name == "stream:error":
-                raise Exception(node.children[0].name)
+                raise StreamError(node.children[0].name)
 
-            if self.debug:
-                print str(node)[0:500]
-
+            # Handle callbacks
             if node.name in self.callbacks:
                 for callback in self.callbacks[node.name]:
                     if callback.test(node):
                         callback(node)
 
-            #elif node.name in ("start", "stream:features"):
-            #    pass # Not interesting
-            #elif self.debug:
-            #    print "Ignorning message"
-            #    print node.to_xml(indent="  ") + "\n"
+    def _msgid(self, prefix):
+        return "%s-%d-%d" % (prefix, time() * 1000, self.counter)
 
-    def _msgid(self):
-        return "msg-%d" % (time() * 1000)
-
-    def register_callback(self, callback):
-        # Add callback to the other callbacks
-        self.callbacks[callback.name].append(callback)
-
-    def register_callbacks(self, *callbacks):
+    def register_callback(self, *callbacks):
         for callback in callbacks:
-            self.register_callback(callback)
+            self.callbacks[callback.name].append(callback)
 
-    def register_callback_and_wait(self, callback):
-        self.register_callback(callback)
-        self.wait_for_callback(callback)
+    def unregister_callback(self, *callbacks):
+        for callback in callbacks:
+            self.callbacks[callback.name].remove(callback)
 
-    def unregister_callback(self, callback):
-        self.callbacks[callback.name].remove(callback)
+    def register_callback_and_wait(self, *callbacks):
+        self.register_callback(*callbacks)
+        self.wait_for_callback(*callbacks)
 
-    def wait_for_callback(self, callback):
-        while not callback.called:
-            self._incoming()
-
-        self.unregister_callback(callback)
-
-        if isinstance(callback.result, Exception):
-            raise callback.result
-
-        return callback.result
-
-    def wait_for_any_callback(self, callbacks):
+    def wait_for_callback(self, *callbacks):
         called = None
-        while called is None:
+
+        # Wait for one of the callbacks to happen
+        while not called:
             for callback in callbacks:
                 if callback.called:
                     called = callback
@@ -259,9 +246,10 @@ class Client(object):
             else:
                 self._incoming()
 
-        for callback in callbacks:
-            self.unregister_callback(callback)
+        # Unregister all callbacks
+        self.unregister_callback(*callbacks)
 
+        # Process result
         if isinstance(called.result, Exception):
             raise called.result
 
@@ -274,15 +262,12 @@ class Client(object):
         # Send a ping once in a while if keep alive and still connected
         if self.keep_alive:
             if (time() - self.last_ping) > PING_INTERVAL:
-                self._ping()
+                #self._ping()
+                self.presence("active")
                 self.last_ping = time()
 
     def disconnect(self):
-        if self.socket:
-            self.socket.close()
-            self.socket = None
-
-        self.account_info = None
+        self._disconnect()
         logger.debug("Disconnected by user")
 
     def connect(self):
@@ -305,28 +290,26 @@ class Client(object):
         #features.add(Node("groups"))
         self._write(features)
 
-        auth = Node("auth", xmlns="urn:ietf:params:xml:ns:xmpp-sasl",
-            mechanism="WAUTH-2", user=self.number)
-        self._write(auth)
+        self._write(Node("auth", mechanism="WAUTH-2", user=self.number))
 
         def on_success(node):
             logger.info("Login successfull")
             self.account_info = node.attributes
 
-            presence = Node("presence")
-            presence["name"] = self.nickname
-            self._write(presence)
+            self._write(Node("presence", name=self.nickname))
+
+        def on_failure(node):
+            self._disconnect()
+            raise LoginError("Incorrect number and/or secret.")
 
         # Create new callback
-        callback = Callback("success", on_success)
-        self.register_callback_and_wait(callback)
+        callback_success = Callback("success", on_success)
+        callback_failure = Callback("failure", on_failure)
 
-        # Raise an exception in case credentials are wronge
-        if self.account_info is None:
-            raise LoginError("Incorrect number and/or secret")
+        self.register_callback_and_wait(callback_success, callback_failure)
 
     def last_seen(self, number):
-        msgid = self._msgid()
+        msgid = self._msgid("lastseen")
 
         iq = Node("iq", type="get", id=msgid)
         iq["from"] = self.number + "@" + self.SERVER
@@ -346,7 +329,7 @@ class Client(object):
         self.register_callback_and_wait(callback)
 
     def _message(self, to, node, group=False):
-        msgid = self._msgid()
+        msgid = self._msgid("message")
 
         message = Node("message", type="chat", id=msgid)
         message["to"] = to + "@" + (self.GROUPHOST if group else self.SERVER)
@@ -369,9 +352,12 @@ class Client(object):
         self._write(message)
         return msgid
 
+    def presence(self, state):
+        self._write(Node("presence", type=state))
+
     def chatstate(self, number, state):
         if state not in CHATSTATES:
-            raise Exception("Invalid chatstate: %r" % state)
+            raise ValueError("Invalid chatstate: %r" % state)
 
         node = Node(state, xmlns=CHATSTATE_NS)
         msgid, message = self._message(number, node)
