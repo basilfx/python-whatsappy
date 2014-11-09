@@ -1,5 +1,5 @@
 # python-whatsappy
-An unoffical Python API for connecting with *the* chat protocol.
+An unoffical Python API for connecting with the WhatsApp chat protocol.
 
 ## Installation
 Clone this repository, and install it via `python setup.py install`.
