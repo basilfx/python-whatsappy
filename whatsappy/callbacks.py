@@ -76,6 +76,7 @@ class PresenceCallback(Callback):
         online -- When user comes online.
         offline -- When user goes offline.
         """
+
         super(PresenceCallback, self).__init__("presence", callback)
 
         self.online = online
@@ -131,6 +132,8 @@ class NotificationCallback(Callback):
     group contexts.
     """
 
+    __slots__ = Callback.__slots__
+
     def __init__(self, callback):
         """
         Construct a new notification callback.
@@ -162,6 +165,7 @@ class MessageCallback(Callback):
         group -- Include messages from group conversations
         offline -- Include offline messages
         """
+
         super(MessageCallback, self).__init__("message", callback)
 
         self.single = single

@@ -5,7 +5,10 @@ An unoffical Python API for connecting with the WhatsApp chat protocol.
 Clone this repository, and install it via `python setup.py install`.
 
 ## Usage
-The API is callback driven and easy to use. See below for a simple example.
+The API is callback driven and easy to use. It interfaces with version 1.4 of
+the protocol. You should provide your own number and secret from a real phone.
+
+Example code is provided below. It registers three callbacks.
 
 ```
 import whatsappy
@@ -13,7 +16,7 @@ import whatsappy
 # Create instance
 client = whatsappy.Client(number=<number>, secret=<secret>, nickname=<nickname>)
 
-# Callback handlers
+# Callbacks handlers
 def on_message(node):
     message = node.child("body").data
     sender = node["from"]
@@ -22,16 +25,23 @@ def on_message(node):
     print "%s: %s" % (sender, message)
 
     # Reply
-    client.message(sender, message)
+    if "-" not in sender:
+        client.message(sender, message)
 
 def on_presence(node):
     print "%s is %s" % (node.get("from"), node.get("type", "online"))
 
+def on_chat_state(node):
+    if node.children[0].name == "composing":
+        print "%s is typing" % node.get("from")
+    else:
+        print "%s stopped typing" % node.get("from")
+
 # Register callbacks
 client.register_callback(
-    whatsappy.TextMessageCallback(on_message, single=True, group=True,
-        offline=False),
-    whatsappy.PresenceCallback(on_presence, online=True, offline=True)
+    whatsappy.TextMessageCallback(on_message, single=True, group=True),
+    whatsappy.PresenceCallback(on_presence, online=True, offline=True),
+    whatsappy.ChatStateCallback(on_chat_state, composing=True, paused=True)
 )
 
 # Start it all

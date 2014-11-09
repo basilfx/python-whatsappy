@@ -231,6 +231,23 @@ class Client(object):
         # Number already formatted
         return number
 
+    def _message(self, to, node, group=False):
+        msgid = self._msgid("message")
+        to = self._jid(to)
+
+        x = Node("x", xmlns="jabber:x:event", children=Node("server"))
+        notify = Node("notify", xmlns="urn:xmpp:whatsapp", name=self.nickname)
+        request = Node("request", xmlns="urn:xmpp:receipts")
+
+        message = Node("message", to=to, type="text", id=msgid,
+            t=utils.timestamp(), children=[x, notify, request, node])
+
+        return msgid, message
+
+    def _receipt(self, node):
+        self._write(Node("receipt", type="read", to=node["from"], id=node["id"],
+            t=utils.timestamp()))
+
     def register_callback(self, *callbacks):
         for callback in callbacks:
             self.callbacks[callback.name].append(callback)
@@ -327,28 +344,11 @@ class Client(object):
             if node["id"] != msgid:
                 return
             if node["type"] == "error":
-                return Exception(node.child("error").children[0].name)
+                return StreamError(node.child("error").children[0].name)
             return int(node.child("query")["seconds"])
 
         callback = Callback("iq", on_iq)
         self.register_callback_and_wait(callback)
-
-    def _message(self, to, node, group=False):
-        msgid = self._msgid("message")
-        to = self._jid(to)
-
-        x = Node("x", xmlns="jabber:x:event", children=Node("server"))
-        notify = Node("notify", xmlns="urn:xmpp:whatsapp", name=self.nickname)
-        request = Node("request", xmlns="urn:xmpp:receipts")
-
-        message = Node("message", to=to, type="text", id=msgid,
-            t=utils.timestamp(), children=[x, notify, request, node])
-
-        return msgid, message
-
-    def _receipt(self, node):
-        self._write(Node("receipt", type="read", to=node["from"], id=node["id"],
-            t=utils.timestamp()))
 
     def message(self, number, text):
         msgid, message = self._message(number, Node("body", data=text))
@@ -423,8 +423,7 @@ class Client(object):
         embedded in the vCard data as base64 encoded JPEG.
         """
 
-        vcard = Node("vcard", data=data)
-        vcard["name"] = name
+        vcard = Node("vcard", name=name, data=data)
 
         media = Node("media", children=[vcard], xmlns="urn:xmpp:whatsapp:mms",
             type="vcard", encoding="text")
