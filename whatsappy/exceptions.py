@@ -5,6 +5,13 @@ class Error(Exception):
     pass
 
 
+class EncryptionError(Error):
+    """
+    Occurs when an exception happens during encryption/decryption of data.
+    """
+    pass
+
+
 class ConnectionError(Error):
     """
     Error class for connection related errors.

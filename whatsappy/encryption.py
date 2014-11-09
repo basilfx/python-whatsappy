@@ -1,4 +1,5 @@
 from whatsappy.rc4 import RC4Engine
+from whatsappy.exceptions import EncryptionError
 
 from time import time
 from pbkdf2 import PBKDF2
@@ -11,13 +12,12 @@ class Encryption(object):
     """
     This class handles:
      - creating the session key
-     - construction the authentication challenge response
      - decryption of messages (for Reader)
      - encryption of messages (for Writer)
 
-    The session keys are derived using PBKDF2. The passphrase is the hashed
+    The four session keys are derived using PBKDF2. The passphrase is the hashed
     secret, the salt is the challenge data sent by the WhatsApp server. The
-    iteration count is 16, key length is 20 bytes.
+    iteration count is 2, key length is 20 bytes.
 
     Encryption and decryption is both done using a RC4 engine. After
     initializing the RC4 engines, the first 768 bytes are dropped.
@@ -48,31 +48,38 @@ class Encryption(object):
         self.rc4_out = RC4Engine(self.keys[0])
         self.rc4_out.process_bytes("\0" * self.KEY_DROP)
 
-    def encrypt(self, data, append_mac=True):# mac_offset=0):
-        encrypted = self.rc4_out.process_bytes(data)
-        mac = self.mac(encrypted, self.keys[1], True)
+    def encrypt(self, data, append_mac=True):
+        """
+        Encrypt a given string of bytes. If 'append_mac' is False, the MAC is
+        prepended to the output, otherwise appended.
+        """
 
-        if append_mac:
-            return encrypted + mac[:4]
-        else:
-            return mac[:4] + encrypted
+        sequence = struct.pack(">I", self.write_sequence)
+        self.write_sequence += 1
+
+        # Encrypt message and calculate MAC
+        encrypted = self.rc4_out.process_bytes(data)
+        mac = hmac.new(self.keys[1], encrypted + sequence,
+            digestmod=sha1).digest()
+
+        return encrypted + mac[:4] if append_mac else mac[:4] + encrypted
 
     def decrypt(self, data):
-        mac = self.mac(data[:-4], self.keys[3], False)[:4]
+        """
+        Decrypt a given string of bytes. Raises an EncryptionError if the MAC
+        fails.
+        """
+
+        sequence = struct.pack(">I", self.read_sequence)
+        self.read_sequence += 1
+
+        # Calculate MAC
+        mac = hmac.new(self.keys[3], data[:-4] + sequence,
+            digestmod=sha1).digest()
 
         # Compare received MAC to calculated MAC
-        if mac != data[-4:]:
-            raise ValueError("MAC mismatch: expected %s, found %s" %
-                (mac.encode("hex"), data[-4:].encode("hex")))
+        if mac[:4] != data[-4:]:
+            raise EncryptionError("MAC mismatch: expected %s, found %s" %
+                (mac[:4].encode("hex"), data[-4:].encode("hex")))
 
         return self.rc4_in.process_bytes(data[:-4])
-
-    def mac(self, data, key, writing):
-        data += struct.pack(">I", self.write_sequence if writing else self.read_sequence)
-
-        if writing:
-            self.write_sequence += 1
-        else:
-            self.read_sequence += 1
-
-        return hmac.new(key, data, digestmod=sha1).digest()
