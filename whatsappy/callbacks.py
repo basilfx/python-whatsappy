@@ -36,6 +36,32 @@ class Callback(object):
 
         return True
 
+class LoginSuccessCallback(Callback):
+    """
+    Callback for succesful login.
+    """
+
+    __slots__ = Callback.__slots__
+
+    def __init__(self, callback):
+        """
+        Construct a new callback.
+        """
+        super(LoginSuccessCallback, self).__init__("success", callback)
+
+class LoginFailedCallback(Callback):
+    """
+    Callback for failed login.
+    """
+
+    __slots__ = Callback.__slots__
+
+    def __init__(self, callback):
+        """
+        Construct a new callback.
+        """
+        super(LoginFailedCallback, self).__init__("failure", callback)
+
 class PresenceCallback(Callback):
     """
     Callback for presence notifications.
@@ -45,18 +71,80 @@ class PresenceCallback(Callback):
 
     def __init__(self, callback, online=True, offline=False):
         """
-        Constructy a new presence callback
+        Construct a new presence callback.
 
-        online -- When user comes online
-        offline -- When user goes offline
+        online -- When user comes online.
+        offline -- When user goes offline.
         """
-        super(PresenceCallback, self).__init__("message", callback)
+        super(PresenceCallback, self).__init__("presence", callback)
 
         self.online = online
         self.offline = offline
 
     def test(self, node):
-        pass
+        if self.online:
+            if not self.offline and node.get("type") == "unavailable":
+                return False
+
+        if self.offline:
+            if not self.online and node.has_child("type"):
+                return False
+
+        return super(PresenceCallback, self).test(node)
+
+class ChatStateCallback(Callback):
+    """
+    Callback for chat state changes.
+    """
+
+    __slots__ = Callback.__slots__ + ("composing", "paused")
+
+    def __init__(self, callback, composing=True, paused=False):
+        """
+        Construct a new chat state callback.
+
+        composing -- Respond to composing states.
+        paused -- Respond to paused states.
+        """
+
+        super(ChatStateCallback, self).__init__("chatstate", callback)
+
+        self.composing = composing
+        self.paused = paused
+
+    def test(self, node):
+        child_name = node.children[0].name
+
+        if self.composing:
+            if not self.paused and child_name == "paused":
+                return False
+
+        if self.paused:
+            if not self.composing and child_name == "composing":
+                return False
+
+        return super(ChatStateCallback, self).test(node)
+
+class NotificationCallback(Callback):
+    """
+    General purpose callback for notifications. Notifications are fired in
+    group contexts.
+    """
+
+    def __init__(self, callback):
+        """
+        Construct a new notification callback.
+        """
+        super(NotificationCallback, self).__init__("notification", callback)
+
+class GroupJoinedCallback(Callback):
+    pass
+
+class GroupLeftCallback(Callback):
+    pass
+
+class GroupChangedCallback(Notification):
+    pass
 
 class MessageCallback(Callback):
     """
@@ -68,7 +156,7 @@ class MessageCallback(Callback):
 
     def __init__(self, callback, single=True, group=False, offline=False):
         """
-        Construct new message callback
+        Construct new message callback.
 
         single -- Include messages from normal conversations
         group -- Include messages from group conversations

@@ -1,6 +1,6 @@
 from whatsappy.stream import Reader, Writer, MessageIncomplete, EndOfStream
 from whatsappy.encryption import Encryption
-from whatsappy.callbacks import Callback
+from whatsappy.callbacks import Callback, LoginSuccessCallback, LoginFailedCallback
 from whatsappy.node import Node
 from whatsappy.exceptions import ConnectionError, StreamError, LoginError
 from whatsappy import utils
@@ -76,12 +76,17 @@ class Client(object):
     def _write(self, buf, encrypt=None):
         if isinstance(buf, Node):
             if self.debug:
-                print utils.dump_xml(buf, prefix="xml > ")
+                print utils.dump_xml(buf, prefix="xml >>  ")
 
-            buf = self.writer.node(buf, encrypt)
+            buf, plain = self.writer.node(buf, encrypt)
+        else:
+            plain = buf
 
         if self.debug:
-            print utils.dump_bytes(buf, prefix=">>>   ")
+            print utils.dump_bytes(plain, prefix="pln >>  ")
+
+        if self.debug:
+            print utils.dump_bytes(buf, prefix="    >>  ")
 
         try:
             self.socket.sendall(buf)
@@ -107,7 +112,7 @@ class Client(object):
                 self._disconnected()
 
             if self.debug:
-                print utils.dump_bytes(buf, prefix="<<<   ")
+                print utils.dump_bytes(buf, prefix="    <<  ")
 
             self.reader.data(buf)
 
@@ -116,10 +121,13 @@ class Client(object):
 
         while True:
             try:
-                node = self.reader.read()
+                node, plain = self.reader.read()
 
                 if self.debug:
-                    print utils.dump_xml(node, prefix="xml < ")
+                    print utils.dump_bytes(plain, prefix="pln <<  ")
+
+                if self.debug:
+                    print utils.dump_xml(node, prefix="xml <<  ")
 
                 nodes.append(node)
             except MessageIncomplete:
@@ -138,7 +146,7 @@ class Client(object):
         self.writer.encrypt = encryption.encrypt
         self.reader.decrypt = encryption.decrypt
 
-        response = "%s%s%d" % (self.number, node.data, time())
+        response = "%s%s%s" % (self.number, node.data, utils.timestamp())
 
         response = Node("response", xmlns="urn:ietf:params:xml:ns:xmpp-sasl",
             data=encryption.encrypt(response, False))
@@ -203,7 +211,25 @@ class Client(object):
                         callback(node)
 
     def _msgid(self, prefix):
-        return "%s-%d-%d" % (prefix, time() * 1000, self.counter)
+        """
+        Generate a unique message ID.
+        """
+
+        return "%s-%s-%d" % (prefix, utils.timestamp(), self.counter)
+
+    def _jid(self, number):
+        """
+        Return Jabber ID for given number.
+        """
+
+        if "@" not in number:
+            if "-" in number:
+                return number + "@" + self.GROUPHOST
+            else:
+                return number + "@" + self.SERVER
+
+        # Number already formatted
+        return number
 
     def register_callback(self, *callbacks):
         for callback in callbacks:
@@ -283,11 +309,9 @@ class Client(object):
             self._disconnect()
             raise LoginError("Incorrect number and/or secret.")
 
-        # Create new callback
-        callback_success = Callback("success", on_success)
-        callback_failure = Callback("failure", on_failure)
-
-        self.register_callback_and_wait(callback_success, callback_failure)
+        # Wait for either success, or failure
+        self.register_callback_and_wait(LoginSuccessCallback(on_success),
+            LoginFailedCallback(on_failure))
 
     def last_seen(self, number):
         msgid = self._msgid("lastseen")
@@ -311,21 +335,20 @@ class Client(object):
 
     def _message(self, to, node, group=False):
         msgid = self._msgid("message")
+        to = self._jid(to)
 
-        message = Node("message", type="chat", id=msgid)
-        message["to"] = to + "@" + (self.GROUPHOST if group else self.SERVER)
+        x = Node("x", xmlns="jabber:x:event", children=Node("server"))
+        notify = Node("notify", xmlns="urn:xmpp:whatsapp", name=self.nickname)
+        request = Node("request", xmlns="urn:xmpp:receipts")
 
-        x = Node("x", xmlns="jabber:x:event")
-        x.add(Node("server"))
-
-        message.add(x)
-        message.add(node)
+        message = Node("message", to=to, type="text", id=msgid,
+            t=utils.timestamp(), children=[x, notify, request, node])
 
         return msgid, message
 
     def _receipt(self, node):
         self._write(Node("receipt", type="read", to=node["from"], id=node["id"],
-            t=str(time())))
+            t=utils.timestamp()))
 
     def message(self, number, text):
         msgid, message = self._message(number, Node("body", data=text))
@@ -352,7 +375,8 @@ class Client(object):
     def image(self, number, url, basename, size, thumbnail = None):
         """
         Send an image to a contact.
-        Url should be publicly accessible
+
+        The URL should be publicly accessible
         Basename does not have to match Url
         Size is the size of the image, in bytes
         Thumbnail should be a Base64 encoded JPEG image, if provided.
