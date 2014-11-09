@@ -137,13 +137,13 @@ class NotificationCallback(Callback):
         """
         super(NotificationCallback, self).__init__("notification", callback)
 
-class GroupJoinedCallback(Callback):
+class GroupJoinedCallback(NotificationCallback):
     pass
 
-class GroupLeftCallback(Callback):
+class GroupLeftCallback(NotificationCallback):
     pass
 
-class GroupChangedCallback(Notification):
+class GroupChangedCallback(NotificationCallback):
     pass
 
 class MessageCallback(Callback):
