@@ -21,14 +21,14 @@ class Reader(object):
     def data(self, buf):
         self.buf += buf
 
-    def _consume(self, bytes):
-        if bytes > len(self.buf):
+    def _consume(self, size):
+        if size > len(self.buf):
             raise Exception("Not enough bytes available")
 
-        self.offset += bytes
+        self.offset += size
 
-        data = self.buf[:bytes]
-        self.buf = self.buf[bytes:]
+        data = self.buf[:size]
+        self.buf = self.buf[size:]
         return data
 
     def _peek(self, bytes):
@@ -38,22 +38,26 @@ class Reader(object):
         if len(self.buf) <= 2:
             raise MessageIncomplete()
 
-        first_byte = self.int8()
+        # Read stanza, but don't consume yet
+        buf = self.peek_int24()
 
-        flags = (first_byte & 0xF0) >> 4
-        length = self.int16() | ((first_byte & 0x0F) << 16)
+        flags = ((buf >> 16) & 0xF0) >> 4
+        length = (buf & 0xFFFF) | (((buf >> 16) & 0x0F) << 16)
 
         if length > len(self.buf):
             raise MessageIncomplete()
 
+        # Process message. At this point, the message is complete, but the first
+        # three bytes should be consumed.
+        self.int24()
+
         if flags & ENCRYPTED_IN:
             return self._read_encrypted(length)
         else:
-            return self._read()
+            plain = self.buf[:length]
+            return self._read(), plain
 
     def _read_encrypted(self, length):
-        assert self.decrypt is not None
-
         message_buf = self._consume(length)
         message_buf = self.decrypt(message_buf)
 
@@ -63,7 +67,8 @@ class Reader(object):
         try:
             self.buf = message_buf
             self.offset = 0
-            return self._read()
+
+            return self._read(), message_buf
         finally:
             self.buf = buf
             self.offset = offset
@@ -178,9 +183,9 @@ class Writer(object):
 
     def node(self, node, encrypt=None):
         if node is None:
-            buf = "\x00"
+            buf = plain = "\x00"
         else:
-            buf = self._node(node)
+            buf = plain = self._node(node)
 
         if encrypt is None:
             encrypt = self.encrypt is not None
@@ -196,7 +201,7 @@ class Writer(object):
         else:
             header = self.int24(len(buf))
 
-        return header + buf
+        return header + buf, plain
 
     def _node(self, node):
         length = 1

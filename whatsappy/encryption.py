@@ -1,7 +1,6 @@
 from whatsappy.rc4 import RC4Engine
 from whatsappy.exceptions import EncryptionError
 
-from time import time
 from pbkdf2 import PBKDF2
 from hashlib import md5, sha1
 

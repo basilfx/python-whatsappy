@@ -16,9 +16,18 @@ class Node(MutableMapping):
 
         self.name = tag
         self.data = data
-        self.children = children if children else []
-
         self.attributes = kwargs
+
+        # Child nodes
+        if children:
+            if type(children) == list:
+                self.children = children
+            elif isinstance(children, Node):
+                self.children = list(children)
+            else:
+                raise ValueError("Expected Node as child")
+        else:
+            self.children = []
 
     def __iter__(self):
         return iter(self.attributes)
@@ -85,9 +94,9 @@ class Node(MutableMapping):
 
         xml += ">\n"
 
-        # Data
+        # Data, with extra indent.
         if self.data:
-            xml += "%s%s\n" % (prefix, self.escape(self.data))
+            xml += "%s%s%s\n" % (prefix, indent * " ", self.escape(self.data))
 
         # Children
         for child in self.children:

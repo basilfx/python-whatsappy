@@ -1,3 +1,5 @@
+import time
+
 def dump_bytes(buf, prefix):
     output = []
 
@@ -26,3 +28,6 @@ def dump_xml(node, prefix):
         output.append(prefix + line)
 
     return "\n".join(output)
+
+def timestamp():
+    return str(int(time.time()))

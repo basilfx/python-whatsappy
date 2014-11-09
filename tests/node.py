@@ -21,17 +21,17 @@ class NodeTest(unittest.TestCase):
         """
 
         node = Node("name")
-        self.assertEqual("<name></name>", node.toxml())
+        self.assertEqual("<name></name>", node.to_xml())
 
         node = Node("name", "data")
-        self.assertEqual("<name>data</name>", node.toxml())
+        self.assertEqual("<name>data</name>", node.to_xml())
 
         node = Node("name", children=[Node("child1"), Node("child2")])
         xml = ("<name>\n" +
                "  <child1></child1>\n" +
                "  <child2></child2>\n" +
                "</name>")
-        self.assertEqual(xml, node.toxml())
+        self.assertEqual(xml, node.to_xml())
 
         self.assertTrue(node.has_child("child1"))
         self.assertTrue(node.has_child("child2"))
