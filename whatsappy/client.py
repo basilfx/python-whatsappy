@@ -26,7 +26,7 @@ PROTOCOL_USER_AGENT = "WhatsApp/2.11.378 Android/4.2 Device/GalaxyS3"
 
 # Other settings
 TIMEOUT = 0.1
-PING_INTERVAL = 30
+ALIVE_INTERVAL = 30
 
 # Logger instance
 logger = logging.getLogger(__name__)
@@ -146,15 +146,6 @@ class Client(object):
         self._write(response, encrypt=False)
         self._incoming()
 
-    def _ping(self):
-        msgid = self._msgid("ping_")
-
-        message = Node("iq", id=msgid, type="get", to=self.SERVER)
-        message.add(Node("ping", xmlns="w:p"))
-
-        self._write(message)
-
-
     def _iq(self, node):
         # Node without children could be a ping reply
         if len(node.children) == 0:
@@ -252,8 +243,7 @@ class Client(object):
         self._incoming()
 
         # Send a ping once in a while if keep alive and still connected
-        if (time() - self.last_ping) > PING_INTERVAL:
-            #self._ping()
+        if (time() - self.last_ping) > ALIVE_INTERVAL:
             self.presence("active")
             self.last_ping = time()
 
