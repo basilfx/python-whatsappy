@@ -9,6 +9,7 @@ from whatsappy import utils
 from select import select
 from time import time
 
+import sys
 import socket
 import logging
 import collections
@@ -44,6 +45,7 @@ class Client(object):
         self.auto_receipt = True
 
         self.debug = False
+        self.debug_out = lambda x: sys.stdout.write(x + "\n")
         self.socket = None
 
         self.account_info = None
@@ -77,17 +79,17 @@ class Client(object):
     def _write(self, buf, encrypt=None):
         if isinstance(buf, Node):
             if self.debug:
-                print utils.dump_xml(buf, prefix="xml >>  ")
+                self.debug_out(utils.dump_xml(buf, prefix="xml >>  "))
 
             buf, plain = self.writer.node(buf, encrypt)
         else:
             plain = buf
 
         if self.debug:
-            print utils.dump_bytes(plain, prefix="pln >>  ")
+            self.debug_out(utils.dump_bytes(plain, prefix="pln >>  "))
 
         if self.debug:
-            print utils.dump_bytes(buf, prefix="    >>  ")
+            self.debug_out(utils.dump_bytes(buf, prefix="    >>  "))
 
         try:
             self.socket.sendall(buf)
@@ -113,7 +115,7 @@ class Client(object):
                 self._disconnected()
 
             if self.debug:
-                print utils.dump_bytes(buf, prefix="    <<  ")
+                self.debug_out(utils.dump_bytes(buf, prefix="    <<  "))
 
             self.reader.data(buf)
 
@@ -125,10 +127,10 @@ class Client(object):
                 node, plain = self.reader.read()
 
                 if self.debug:
-                    print utils.dump_bytes(plain, prefix="pln <<  ")
+                    self.debug_out(utils.dump_bytes(plain, prefix="pln <<  "))
 
                 if self.debug:
-                    print utils.dump_xml(node, prefix="xml <<  ")
+                    self.debug_out(utils.dump_xml(node, prefix="xml <<  "))
 
                 nodes.append(node)
             except MessageIncomplete:
