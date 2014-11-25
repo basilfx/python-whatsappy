@@ -178,7 +178,7 @@ class MessageCallback(Callback):
             return False
 
         # Include group messages or not
-        if node.get("author"):
+        if node.get("participant"):
             if not self.group:
                 return False
         else:
