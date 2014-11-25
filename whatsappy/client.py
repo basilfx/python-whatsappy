@@ -187,6 +187,19 @@ class Client(object):
             else:
                 logger.debug("No 'ib' handler for %s implemented", child.name)
 
+    def _notification(self, node):
+        out = Node("ack", to=node["from"], id=node["id"], type=node["type"])
+
+        # Class is reserved keyword.
+        out["class"] = "notification"
+
+        if node["to"]:
+            out["from"] = node["to"]
+        if node["participant"]:
+            out["participant"] = node["participant"]
+
+        self._write(out)
+
     def _incoming(self):
         nodes = self._read()
 
@@ -200,6 +213,8 @@ class Client(object):
                 self._ib(node)
             elif node.name == "iq":
                 self._iq(node)
+            elif node.name == "notification":
+                self._notification(node)
             elif node.name in ("start", "stream:features"):
                 pass
             elif node.name == "stream:error":
