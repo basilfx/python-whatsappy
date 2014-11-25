@@ -147,9 +147,9 @@ class Reader(object):
 
     def string(self):
         token = self._consume(1)
-        if token < "\x05":
+        if token == "\x00":
             return ""
-        elif "\x05" <= token <= "\xF5":
+        elif "\x02" <= token <= "\xF5":
             return tok2str(ord(token))
         elif token == "\xFA":
             user = self.string()
