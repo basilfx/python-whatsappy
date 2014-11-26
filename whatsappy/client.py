@@ -313,8 +313,6 @@ class Client(object):
         logger.debug("Disconnected by user")
 
     def connect(self):
-        assert self.socket is None
-
         self.reader = Reader()
         self.writer = Writer()
 
