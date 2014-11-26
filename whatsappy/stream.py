@@ -1,20 +1,30 @@
-import sys
-
 from whatsappy.tokens import str2tok, tok2str
 from whatsappy.node import Node
-
-class MessageIncomplete(Exception):
-    pass
-
-class EndOfStream(Exception):
-    pass
+from whatsappy.exceptions import StreamError
 
 ENCRYPTED_IN  = 0x8
 ENCRYPTED_OUT = 0x1
 
+class MessageIncomplete(Exception):
+    """
+    Indicates that the receiver needs more data before continuing.
+    """
+    pass
+
+
+class EndOfStream(Exception):
+    """
+    Indicates an end of stream error.
+    """
+    pass
+
+
 class Reader(object):
-    def __init__(self, buf=None):
-        self.buf = buf or bytes()
+    """
+    """
+
+    def __init__(self):
+        self.buf = bytes()
         self.offset = 0
         self.decrypt = None
 
@@ -23,7 +33,7 @@ class Reader(object):
 
     def _consume(self, size):
         if size > len(self.buf):
-            raise Exception("Not enough bytes available")
+            raise StreamError("Not enough bytes available")
 
         self.offset += size
 
@@ -75,14 +85,13 @@ class Reader(object):
 
     def _read(self):
         length = self.list_start()
-
         token = self._peek(1)
+
         if token == "\x01":
             self._consume(1)
             attributes = self.attributes(length)
             return Node("start", **attributes)
-
-        if token == "\x02":
+        elif token == "\x02":
             self._consume(1)
             raise EndOfStream()
 
@@ -135,7 +144,7 @@ class Reader(object):
         elif token == "\xF9":
             return self.int16()
         else:
-            raise Exception("Unknown list_start token '%02x'" % ord(token))
+            raise ValueError("Unknown list start token: %02x" % ord(token))
 
     def attributes(self, length):
         attributes = {}
@@ -162,9 +171,11 @@ class Reader(object):
         elif token == "\xFE":
             return tok2str(0xF5 + self.int8())
         else:
-            raise Exception("Unknown string token '%02x'" % ord(token))
+            raise ValueError("Unknown string token: %02x" % ord(token))
 
 class Writer(object):
+    """
+    """
 
     def __init__(self):
         self.encrypt = None
@@ -286,6 +297,4 @@ class Writer(object):
         elif length <= 0xFF:
             return "\xF8" + chr(length)
         else:
-            # XXX: PHP Code says "\xf9" . chr($len), chr seems to wrap
-            # TODO: Find out if this is correct / intentional
             return "\xF9" + self.int16(length)
