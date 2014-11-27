@@ -83,12 +83,12 @@ class PresenceCallback(Callback):
         self.offline = offline
 
     def test(self, node):
-        if self.online:
-            if not self.offline and node.get("type") == "unavailable":
+        if node.get("type") == "unavailable":
+            if not self.offline:
                 return False
 
-        if self.offline:
-            if not self.online and node.has_child("type"):
+        if node.has_child("type"):
+            if not self.online:
                 return False
 
         return super(PresenceCallback, self).test(node)
@@ -116,12 +116,12 @@ class ChatStateCallback(Callback):
     def test(self, node):
         child_name = node.children[0].name
 
-        if self.composing:
-            if not self.paused and child_name == "paused":
+        if child_name == "paused":
+            if not self.paused:
                 return False
 
-        if self.paused:
-            if not self.composing and child_name == "composing":
+        if child_name == "composing":
+            if not self.composing:
                 return False
 
         return super(ChatStateCallback, self).test(node)
@@ -141,13 +141,56 @@ class NotificationCallback(Callback):
         super(NotificationCallback, self).__init__("notification", callback)
 
 class GroupJoinedCallback(NotificationCallback):
-    pass
+    """
+    Callback for group joined notifications.
+    """
+
+    __slots__ = NotificationCallback.__slots__
+
+    def test(self, node):
+        if not node.has_child("add"):
+            return False
+
+        return Super(GroupJoinedCallback, self).test(node)
 
 class GroupLeftCallback(NotificationCallback):
-    pass
+    """
+    Callback for group left notifications.
+    """
+
+    __slots__ = NotificationCallback.__slots__
+
+    def test(self, node):
+        if not node.has_child("remove"):
+            return False
+
+        return Super(GroupChangedCallback, self).test(node)
 
 class GroupChangedCallback(NotificationCallback):
-    pass
+    """
+    Callback for group changed notifications.
+    """
+
+    __slots__ = NotificationCallback.__slots__ + ("picture", "title")
+
+    def __init__(self, callback, picture=True, title=True, **kwargs):
+        super(GroupChangedCallback, self).__init__(callback, **kwargs)
+
+        self.picture = picture
+        self.title = title
+
+    def test(self, node):
+        # Picture changes
+        if node.get("type") == "subject":
+            if not self.title:
+                return False
+
+        # Title changes
+        if node.get("type") == "picture":
+            if not self.picture:
+                return False
+
+        return super(GroupChangedCallback, self).test(node)
 
 class MessageCallback(Callback):
     """
@@ -173,10 +216,6 @@ class MessageCallback(Callback):
         self.offline = offline
 
     def test(self, node):
-        # Chat messages only
-        if node.get("type") != "text":
-            return False
-
         # Include group messages or not
         if node.get("participant"):
             if not self.group:
@@ -199,6 +238,10 @@ class TextMessageCallback(MessageCallback):
     __slots__ = MessageCallback.__slots__
 
     def test(self, node):
+        # Chat messages only
+        if node.get("type") != "text":
+            return False
+
         # Messages with body only
         if not node.has_child("body"):
             return False
@@ -222,10 +265,8 @@ class MediaMessageCallback(MessageCallback):
         self.types = types
 
     def test(self, node):
-        import pudb; pu.db
-
-        # Messages with media only
-        if not node.has_child("media"):
+        # Media messages only
+        if node.get("type") != "media":
             return False
 
         # Media messages of certain type only
