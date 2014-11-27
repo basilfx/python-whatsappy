@@ -3,7 +3,7 @@ from whatsappy import Node
 import unittest
 
 class NodeTest(unittest.TestCase):
-    def test_ctor(self):
+    def test_init(self):
         """
         Test some variants of the Node __init__ method
         """
@@ -15,7 +15,7 @@ class NodeTest(unittest.TestCase):
         node = Node("name", attr1="value1", attr2="value2")
         self.assertEqual(dict(attr1="value1", attr2="value2"), node.attributes)
 
-    def test_toxml(self):
+    def test_to_xml(self):
         """
         Test if serializing to XML works
         """
@@ -24,17 +24,34 @@ class NodeTest(unittest.TestCase):
         self.assertEqual("<name></name>", node.to_xml())
 
         node = Node("name", "data")
-        self.assertEqual("<name>data</name>", node.to_xml())
+        self.assertEqual("<name>\n    data\n</name>", node.to_xml(indent=4))
 
         node = Node("name", children=[Node("child1"), Node("child2")])
         xml = ("<name>\n" +
-               "  <child1></child1>\n" +
-               "  <child2></child2>\n" +
+               "    <child1></child1>\n" +
+               "    <child2></child2>\n" +
                "</name>")
-        self.assertEqual(xml, node.to_xml())
+        self.assertEqual(xml, node.to_xml(indent=4))
+
+    def test_has_child(self):
+        """
+        Test has child methods.
+        """
+
+        node = Node("name", children=[Node("child1"), Node("child2")])
 
         self.assertTrue(node.has_child("child1"))
         self.assertTrue(node.has_child("child2"))
+
+    def test_has_attribute(self):
+        """
+        Test has attribute methods.
+        """
+
+        node = Node("name", attr1="attribute", attr2=None)
+
+        self.assertTrue(node.has_attribute("attr1"))
+        self.assertFalse(node.has_attribute("attr2"))
 
     def test_dict(self):
         """

@@ -8,15 +8,6 @@ import os
 KEY = os.urandom(20)
 
 class RC4Test(unittest.TestCase):
-    def test_key(self):
-        """
-        Test if the constructor correctly calls set_key
-        """
-
-        a = RC4Engine(KEY)
-        b = RC4Engine()
-        b.set_key(KEY)
-        self.assertEqual(a.box, b.box)
 
     def test_encryption(self):
         """
@@ -24,9 +15,11 @@ class RC4Test(unittest.TestCase):
         (http://en.wikipedia.org/wiki/RC4#Test_vectors)
         """
 
-        tests = [("Key", "Plaintext", "BBF316E8D940AF0AD3"),
-                 ("Wiki", "pedia", "1021BF0420"),
-                 ("Secret", "Attack at dawn", "45A01F645FC35B383552544B9BF5")]
+        tests = [
+            ("Key", "Plaintext", "BBF316E8D940AF0AD3"),
+            ("Wiki", "pedia", "1021BF0420"),
+            ("Secret", "Attack at dawn", "45A01F645FC35B383552544B9BF5")
+        ]
 
         for key, plain, cipher in tests:
             rc4 = RC4Engine(key)
@@ -46,9 +39,11 @@ class RC4Test(unittest.TestCase):
         self.assertEqual(a.box, b.box)
 
         message = os.urandom(128)
-        self.assertEqual(a.process_bytes(b.process_bytes(message)), message, "encryption is reversible")
+        self.assertEqual(a.process_bytes(b.process_bytes(message)), message,
+            "encryption is reversible")
         self.assertEqual(a.box, b.box)
 
         message = os.urandom(128)
-        self.assertEqual(a.process_bytes(b.process_bytes(message)), message, "encryption is reversible")
+        self.assertEqual(a.process_bytes(b.process_bytes(message)), message,
+            "encryption is reversible")
         self.assertEqual(a.box, b.box)

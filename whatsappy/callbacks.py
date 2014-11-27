@@ -207,14 +207,30 @@ class TextMessageCallback(MessageCallback):
 
 class MediaMessageCallback(MessageCallback):
     """
-    Message callback, specific for media-only messages.
+    Message callback, specific for media-only messages. Optionally, the type of
+    media messages can be filtered.
+
+    types -- List of types to filter on. Valid types are 'image', 'video',
+             'audio', 'vcard' or 'location'.
     """
 
-    __slots__ = MessageCallback.__slots__
+    __slots__ = MessageCallback.__slots__ + ("types", )
+
+    def __init__(self, callback, types=None, **kwargs):
+        super(MediaMessageCallback, self).__init__(callback, **kwargs)
+
+        self.types = types
 
     def test(self, node):
+        import pudb; pu.db
+
         # Messages with media only
         if not node.has_child("media"):
             return False
+
+        # Media messages of certain type only
+        if self.types:
+            if node.child("media")["type"] not in self.types:
+                return False
 
         return super(MediaMessageCallback, self).test(node)
