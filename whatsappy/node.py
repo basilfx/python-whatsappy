@@ -95,19 +95,26 @@ class Node(MutableMapping):
         for attribute, value in self.attributes.iteritems():
             xml += " %s=\"%s\"" % (attribute, self.escape(value))
 
-        xml += ">\n"
+        xml += ">"
 
-        # Data, with extra indent.
-        if self.data:
-            xml += "%s%s%s\n" % (prefix, indent * " ", self.escape(self.data))
+        if self.data or self.children:
+            # Data, with extra indent.
+            if self.data:
+                xml += "\n%s%s%s\n" % (prefix, indent * " ", self.escape(self.data))
 
-        # Children
-        for child in self.children:
-            child = child.to_xml(indent=indent, level=level + 1)
-            xml += "%s%s\n" % (prefix, child)
+            # Children
+            if self.children:
+                xml += "\n"
+
+                for child in self.children:
+                    child = child.to_xml(indent=indent, level=level + 1)
+                    xml += "%s%s\n" % (prefix, child)
+
+            # Add ident for closing tag
+            xml += "%s" % prefix
 
         # Closing tag
-        xml += "%s</%s>" % (prefix, self.name)
+        xml += "</%s>" % self.name
 
         return xml
 
