@@ -45,7 +45,7 @@ class Client(object):
         self.auto_receipt = True
 
         self.debug = False
-        self.debug_out = lambda x: sys.stdout.write(x + "\n")
+        self.debug_out = sys.stdout.write
         self.socket = None
 
         self.account_info = None
@@ -79,17 +79,17 @@ class Client(object):
     def _write(self, buf, encrypt=None):
         if isinstance(buf, Node):
             if self.debug:
-                self.debug_out(utils.dump_xml(buf, prefix="xml >>  "))
+                self.debug_out(utils.dump_xml(buf, prefix="xml >>  ") + "\n")
 
             buf, plain = self.writer.node(buf, encrypt)
         else:
             plain = buf
 
         if self.debug:
-            self.debug_out(utils.dump_bytes(plain, prefix="pln >>  "))
+            self.debug_out(utils.dump_bytes(plain, prefix="pln >>  ") + "\n")
 
         if self.debug:
-            self.debug_out(utils.dump_bytes(buf, prefix="    >>  "))
+            self.debug_out(utils.dump_bytes(buf, prefix="    >>  ") + "\n")
 
         try:
             self.socket.sendall(buf)
@@ -115,7 +115,7 @@ class Client(object):
                 self._disconnected()
 
             if self.debug:
-                self.debug_out(utils.dump_bytes(buf, prefix="    <<  "))
+                self.debug_out(utils.dump_bytes(buf, prefix="    <<  ") + "\n")
 
             self.reader.data(buf)
 
@@ -127,10 +127,12 @@ class Client(object):
                 node, plain = self.reader.read()
 
                 if self.debug:
-                    self.debug_out(utils.dump_bytes(plain, prefix="pln <<  "))
+                    self.debug_out(utils.dump_bytes(plain, prefix="pln <<  ")
+                        + "\n")
 
                 if self.debug:
-                    self.debug_out(utils.dump_xml(node, prefix="xml <<  "))
+                    self.debug_out(utils.dump_xml(node, prefix="xml <<  ")
+                        + "\n")
 
                 nodes.append(node)
             except MessageIncomplete:
