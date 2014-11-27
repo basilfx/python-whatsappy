@@ -85,13 +85,13 @@ class Reader(object):
 
     def _read(self):
         length = self.list_start()
-        token = self._peek(1)
+        token = self.peek_int8()
 
-        if token == "\x01":
+        if token == 0x01:
             self._consume(1)
             attributes = self.attributes(length)
             return Node("start", **attributes)
-        elif token == "\x02":
+        elif token == 0x02:
             self._consume(1)
             raise EndOfStream()
 
@@ -99,8 +99,9 @@ class Reader(object):
         node.attributes = self.attributes(length)
 
         if (length % 2) == 0:
-            token = self._peek(1)
-            if token == "\xF8" or token == "\xF9":
+            token = self.peek_int8()
+
+            if token == 0xf8 or token == 0xf9:
                 node.children = self.list()
             else:
                 node.data = self.string()
@@ -136,18 +137,20 @@ class Reader(object):
         return children
 
     def list_start(self):
-        token = self._consume(1)
-        if token == "\x00":
+        token = self.int8()
+
+        if token == 0x00:
             return 0
-        elif token == "\xF8":
+        elif token == 0xF8:
             return self.int8()
-        elif token == "\xF9":
+        elif token == 0xF9:
             return self.int16()
         else:
             raise ValueError("Unknown list start token: %02x" % ord(token))
 
     def attributes(self, length):
         attributes = {}
+
         for _ in range((length - 1) / 2):
             name = self.string()
             value = self.string()
@@ -155,20 +158,24 @@ class Reader(object):
         return attributes
 
     def string(self):
-        token = self._consume(1)
-        if token == "\x00":
+        token = self.int8()
+
+        if token == 0x00:
             return ""
-        elif "\x02" <= token <= "\xF5":
-            return tok2str(ord(token))
-        elif token == "\xFA":
+        elif 0x02 < token < 0xf5:
+            if token == 0xec:
+                return tok2str(0xed + self.int8())
+            else:
+                return tok2str(token)
+        elif token == 0xFA:
             user = self.string()
             server = self.string()
             return user + "@" + server
-        elif token == "\xFC":
+        elif token == 0xFC:
             return self._consume(self.int8())
-        elif token == "\xFD":
+        elif token == 0xFD:
             return self._consume(self.int24())
-        elif token == "\xFE":
+        elif token == 0xFE:
             return tok2str(0xF5 + self.int8())
         else:
             raise ValueError("Unknown string token: %02x" % ord(token))
