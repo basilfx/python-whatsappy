@@ -65,6 +65,9 @@ class Node(MutableMapping):
     def has_child(self, name):
         return self.child(name) is not None
 
+    def has_attribute(self, attribute):
+        return attribute in self and self[attribute] is not None
+
     def escape(self, string):
         def escape_char(c):
             if c in XML_ENT:

@@ -195,9 +195,9 @@ class Client(object):
         # Class is reserved keyword.
         out["class"] = "notification"
 
-        if node["to"]:
+        if node.has_attribute("to"):
             out["from"] = node["to"]
-        if node["participant"]:
+        if node.has_attribute("participant"):
             out["participant"] = node["participant"]
 
         self._write(out)
