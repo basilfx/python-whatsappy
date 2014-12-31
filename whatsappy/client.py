@@ -355,7 +355,7 @@ class Client(object):
         self._write(auth)
 
         def on_success(node):
-            self.auth_challenge = node.data
+            self.auth_blob = node.data
             self.account_info = node.attributes
 
             self._write(Node("presence", name=self.nickname))
