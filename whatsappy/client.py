@@ -1,5 +1,5 @@
 from whatsappy.stream import Reader, Writer, MessageIncomplete, EndOfStream
-from whatsappy.encryption import Encryption
+from whatsappy.encryption import Encryption, AuthBlobEncryption
 from whatsappy.callbacks import Callback, LoginSuccessCallback, \
     LoginFailedCallback
 from whatsappy.node import Node
@@ -37,10 +37,15 @@ class Client(object):
     SERVER = "s.whatsapp.net"
     GROUPHOST = "g.us"
 
-    def __init__(self, number, secret, nickname=None):
+    def __init__(self, number, secret, nickname=None, auth_blob=None,
+        mcc_mnc=None):
+
         self.number = number
         self.secret = secret
         self.nickname = nickname
+
+        self.auth_blob = auth_blob
+        self.mcc_mnc = mcc_mnc
 
         self.auto_receipt = True
 
@@ -151,10 +156,8 @@ class Client(object):
         self.writer.encrypt = encryption.encrypt
         self.reader.decrypt = encryption.decrypt
 
-        response = "%s%s%s" % (self.number, node.data, utils.timestamp())
-
-        response = Node("response", xmlns="urn:ietf:params:xml:ns:xmpp-sasl",
-            data=encryption.encrypt(response, False))
+        data = "%s%s%s" % (self.number, node.data, utils.timestamp())
+        response = Node("response", data=encryption.encrypt(data, False))
 
         self._write(response, encrypt=False)
         self._incoming()
@@ -270,7 +273,7 @@ class Client(object):
 
     def register_callback(self, *callbacks):
         for callback in callbacks:
-            self.callbacks[callback.name].append(callback)
+            self.callbacks[callback.name].insert(0, callback)
 
     def unregister_callback(self, *callbacks):
         for callback in callbacks:
@@ -324,18 +327,35 @@ class Client(object):
             (PROTOCOL_DEVICE, PROTOCOL_VERSION, PORT))
         self._write(buf)
 
+        # Send features node
         features = Node("stream:features")
-        #features.add(Node("receipt_acks"))
-        #features.add(Node("w:profile:picture", type="all"))
-        #features.add(Node("status"))
-        #features.add(Node("notification", type="participant"))
-        #features.add(Node("groups"))
+        features.add(Node("readreceipts"))
+        features.add(Node("groups_v2"))
+        features.add(Node("privacy"))
+        features.add(Node("presence"))
         self._write(features)
 
-        self._write(Node("auth", mechanism="WAUTH-2", user=self.number))
+        # Send auth node
+        auth = Node("auth", mechanism="WAUTH-2", user=self.number)
+
+        if self.auth_blob:
+            encryption = AuthBlobEncryption(self.secret, self.auth_blob)
+            logger.debug("Session Keys (re-using auth challenge): %s",
+                [ key.encode("hex") for key in encryption.keys ])
+
+            #self.writer.encrypt = encryption.encrypt
+            self.reader.decrypt = encryption.decrypt
+
+            # From WhatsAPI. It does not encrypt the data, but generates a MAC
+            # based on the keys.
+            data = "%s%s%s%s MccMnc/%s" % (self.number, self.auth_blob,
+                utils.timestamp(), PROTOCOL_USER_AGENT, self.mcc_mnc)
+            auth.data = encryption.encrypt("", False) + data
+
+        self._write(auth)
 
         def on_success(node):
-            logger.info("Login successfull")
+            self.auth_challenge = node.data
             self.account_info = node.attributes
 
             self._write(Node("presence", name=self.nickname))
@@ -367,6 +387,21 @@ class Client(object):
 
         callback = Callback("iq", on_iq)
         self.register_callback_and_wait(callback)
+
+    def send_sync(self, numbers, mode="full", context="registration", index=0, last=True):
+        msgid = self._msgid("sync")
+        sid = (int(time()) + 11644477200) * 10000000
+
+        sync = Node("sync", mode=mode, context=context, sid=str(sid), index=str(index),
+            last="true" if last else "false")
+        node = Node("iq", to=self.number + "@" + self.SERVER, type="get", id=msgid,
+            xmlns="urn:xmpp:whatsapp:sync")
+        node.add(sync)
+
+        for number in numbers:
+            sync.add(Node("user", data=number))
+
+        self._write(node)
 
     def message(self, number, text):
         msgid, message = self._message(number, Node("body", data=text))

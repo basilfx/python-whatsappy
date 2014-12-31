@@ -10,13 +10,9 @@ import struct
 class Encryption(object):
     """
     This class handles:
-     - creating the session key
+     - creating the keys
      - decryption of messages (for Reader)
      - encryption of messages (for Writer)
-
-    The four session keys are derived using PBKDF2. The passphrase is the hashed
-    secret, the salt is the challenge data sent by the WhatsApp server. The
-    iteration count is 2, key length is 20 bytes.
 
     Encryption and decryption is both done using a RC4 engine. After
     initializing the RC4 engines, the first 768 bytes are dropped.
@@ -24,7 +20,8 @@ class Encryption(object):
 
     KEY_ITERATIONS = 2
     KEY_LENGTH = 20
-    KEY_DROP = 768
+
+    RC4_DROP = 768
 
     def __init__(self, secret, challenge):
         self.secret = secret
@@ -34,18 +31,30 @@ class Encryption(object):
         self.write_sequence = 0
         self.read_sequence = 0
 
-        # Generate session keys
-        for i in xrange(4):
-            key = PBKDF2(secret, challenge + chr(i + 1),
-                iterations=self.KEY_ITERATIONS).read(self.KEY_LENGTH)
-            self.keys.append(key)
+        # Compute keys
+        self.compute()
 
         # Construct RC4 engines, from which the first 768 bytes are dropped.
         self.rc4_in = RC4Engine(self.keys[2])
-        self.rc4_in.process_bytes("\0" * self.KEY_DROP)
+        self.rc4_in.process_bytes("\0" * self.RC4_DROP)
 
         self.rc4_out = RC4Engine(self.keys[0])
-        self.rc4_out.process_bytes("\0" * self.KEY_DROP)
+        self.rc4_out.process_bytes("\0" * self.RC4_DROP)
+
+    def compute(self):
+        """
+        Compute the four session keys for the RC4 engines.
+
+        The four session keys are derived using PBKDF2. The passphrase is the
+        hashed secret, the salt is the challenge data sent by the WhatsApp
+        server. The iteration count is 2, key length is 20 bytes.
+        """
+
+        # Generate keys
+        for i in xrange(4):
+            key = PBKDF2(self.secret, self.challenge + chr(i + 1),
+                iterations=self.KEY_ITERATIONS).read(self.KEY_LENGTH)
+            self.keys.append(key)
 
     def encrypt(self, data, append_mac=True):
         """
@@ -82,3 +91,14 @@ class Encryption(object):
                 (mac[:4].encode("hex"), data[-4:].encode("hex")))
 
         return self.rc4_in.process_bytes(data[:-4])
+
+class AuthBlobEncryption(Encryption):
+
+    KEY_ITERATIONS = 16
+
+    def compute(self):
+        data = PBKDF2(self.secret, self.challenge,
+            iterations=self.KEY_ITERATIONS).read(self.KEY_LENGTH)
+
+        for i in xrange(4):
+            self.keys.append(data[i])
