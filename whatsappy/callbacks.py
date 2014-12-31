@@ -36,6 +36,7 @@ class Callback(object):
 
         return True
 
+
 class LoginSuccessCallback(Callback):
     """
     Callback for succesful login.
@@ -49,6 +50,7 @@ class LoginSuccessCallback(Callback):
         """
         super(LoginSuccessCallback, self).__init__("success", callback)
 
+
 class LoginFailedCallback(Callback):
     """
     Callback for failed login.
@@ -61,6 +63,7 @@ class LoginFailedCallback(Callback):
         Construct a new callback.
         """
         super(LoginFailedCallback, self).__init__("failure", callback)
+
 
 class PresenceCallback(Callback):
     """
@@ -92,6 +95,7 @@ class PresenceCallback(Callback):
                 return False
 
         return super(PresenceCallback, self).test(node)
+
 
 class ChatStateCallback(Callback):
     """
@@ -126,6 +130,7 @@ class ChatStateCallback(Callback):
 
         return super(ChatStateCallback, self).test(node)
 
+
 class NotificationCallback(Callback):
     """
     General purpose callback for notifications. Notifications are fired in
@@ -140,6 +145,7 @@ class NotificationCallback(Callback):
         """
         super(NotificationCallback, self).__init__("notification", callback)
 
+
 class GroupJoinedCallback(NotificationCallback):
     """
     Callback for group joined notifications.
@@ -153,6 +159,7 @@ class GroupJoinedCallback(NotificationCallback):
 
         return Super(GroupJoinedCallback, self).test(node)
 
+
 class GroupLeftCallback(NotificationCallback):
     """
     Callback for group left notifications.
@@ -165,6 +172,7 @@ class GroupLeftCallback(NotificationCallback):
             return False
 
         return Super(GroupChangedCallback, self).test(node)
+
 
 class GroupChangedCallback(NotificationCallback):
     """
@@ -191,6 +199,7 @@ class GroupChangedCallback(NotificationCallback):
                 return False
 
         return super(GroupChangedCallback, self).test(node)
+
 
 class MessageCallback(Callback):
     """
@@ -230,6 +239,7 @@ class MessageCallback(Callback):
 
         return super(MessageCallback, self).test(node)
 
+
 class TextMessageCallback(MessageCallback):
     """
     Message callback, specific for text-only messages.
@@ -247,6 +257,7 @@ class TextMessageCallback(MessageCallback):
             return False
 
         return super(TextMessageCallback, self).test(node)
+
 
 class MediaMessageCallback(MessageCallback):
     """
@@ -275,3 +286,23 @@ class MediaMessageCallback(MessageCallback):
                 return False
 
         return super(MediaMessageCallback, self).test(node)
+
+
+class SyncResultCallback(Callback):
+    """
+    Callback for contact sync result.
+    """
+
+    __slots__ = Callback.__slots__
+
+    def __init__(self, callback):
+        """
+        Construct a new callback.
+        """
+        super(SyncResultCallback, self).__init__("iq", callback)
+
+    def test(self, node):
+        if not node.has_child("sync"):
+            return False
+
+        return super(SyncResultCallback, self).test(node)

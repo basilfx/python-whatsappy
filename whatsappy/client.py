@@ -398,7 +398,10 @@ class Client(object):
             xmlns="urn:xmpp:whatsapp:sync")
         node.add(sync)
 
+        # Add numbers to node
         for number in numbers:
+            if number[0] != "+":
+                number = "+" + number
             sync.add(Node("user", data=number))
 
         self._write(node)
