@@ -6,7 +6,8 @@ Clone this repository, and install it via `python setup.py install`.
 
 ## Usage
 The API is callback driven and easy to use. It interfaces with version 1.4 of
-the protocol. You should provide your own number and secret from a real phone.
+the WhatsApp protocol. You should provide your own number and secret, which you
+can intercept from a real phone.
 
 Example code is provided below. It registers three callbacks.
 
@@ -86,6 +87,6 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## Disclaimer
-WhatsApp is a registered trademark of WhatsApp Inc registered in the U.S. and
+WhatsApp is a registered trademark of WhatsApp Inc. registered in the U.S. and
 other countries. This project is an independent work and has not been
 authorized, sponsored, or otherwise approved by Whatsapp Inc.
