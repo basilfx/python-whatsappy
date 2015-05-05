@@ -33,6 +33,18 @@ class NodeTest(unittest.TestCase):
                "</name>")
         self.assertEqual(xml, node.to_xml(indent=4))
 
+        node = Node("iq", children=[Node("parent", children=[Node("in", children=[Node("user", data="123")])])])
+        xml = ("<iq>\n" +
+               "    <parent>\n" +
+               "        <in>\n" +
+               "            <user>\n" +
+               "                123\n" +
+               "            </user>\n" +
+               "        </in>\n" +
+               "    </parent>\n" +
+               "</iq>")
+        self.assertEqual(xml, node.to_xml(indent=4))
+
     def test_has_child(self):
         """
         Test has child methods.

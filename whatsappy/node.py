@@ -108,7 +108,7 @@ class Node(MutableMapping):
 
                 for child in self.children:
                     child = child.to_xml(indent=indent, level=level + 1)
-                    xml += "%s%s\n" % (prefix, child)
+                    xml += "%s\n" % (child)
 
             # Add ident for closing tag
             xml += "%s" % prefix
