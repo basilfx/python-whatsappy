@@ -67,7 +67,7 @@ Released under the MIT License
 
 Copyright (C) 2012 Paul Hooijenga (Original author, https://github.com/hackedd)
 
-Copyright (C) 2014 Bas Stottelaar
+Copyright (C) 2014-2015 Bas Stottelaar
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in

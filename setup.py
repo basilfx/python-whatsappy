@@ -3,9 +3,9 @@ from setuptools import setup
 # Setup definitions
 setup(
     name="python-whatsappy",
-    version="2.0.1",
-    description="An unoffical Python API for connecting with the WhatsApp " \
-        "chat protocol.",
+    version="3.0.0",
+    description="An unoffical Python API for connecting with the WhatsApp "
+                "chat protocol.",
     author="Bas Stottelaar",
     py_modules=["whatsappy"],
     install_requires=["pbkdf2"],
