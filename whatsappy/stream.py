@@ -2,8 +2,9 @@ from whatsappy.tokens import str2tok, tok2str
 from whatsappy.node import Node
 from whatsappy.exceptions import StreamError
 
-ENCRYPTED_IN  = 0x8
+ENCRYPTED_IN = 0x8
 ENCRYPTED_OUT = 0x1
+
 
 class MessageIncomplete(Exception):
     """
@@ -57,8 +58,8 @@ class Reader(object):
         if length > len(self.buf):
             raise MessageIncomplete()
 
-        # Process message. At this point, the message is complete, but the first
-        # three bytes should be consumed.
+        # Process message. At this point, the message is complete, but the
+        # first three bytes should be consumed.
         self.int24()
 
         if flags & ENCRYPTED_IN:
@@ -177,8 +178,28 @@ class Reader(object):
             return self._consume(self.int24())
         elif token == 0xFE:
             return tok2str(0xF5 + self.int8())
+        elif token == 0xFF:
+            nibble = self.int8()
+            ignore_last_nibble = nibble & 0x80
+            size = nibble & 0x7f
+            nibbles_count = size * 2 - (1 if ignore_last_nibble else 0)
+
+            data = self._consume(size)
+            output = ""
+
+            for i in xrange(nibbles_count):
+                shift = 4 * (1 - i % 2)
+                decimal = (ord(data[i // 2]) & (15 << shift)) >> shift
+
+                if decimal < 10:
+                    output += str(decimal)
+                else:
+                    output += chr(decimal - 10 + 45)
+
+            return output
         else:
             raise ValueError("Unknown string token: %02x" % ord(token))
+
 
 class Writer(object):
     """
@@ -188,10 +209,10 @@ class Writer(object):
         self.encrypt = None
 
     def start_stream(self, domain, resource):
-        attributes = { "to": domain, "resource": resource }
+        attributes = {"to": domain, "resource": resource}
 
-        # Version 1.4
-        buf = "WA\x01\x04\x00\x00\x1c"
+        # Version 1.5
+        buf = "WA\x01\x05\x00\x00\x17"
 
         buf += self.list_start(len(attributes) * 2 + 1)
         buf += "\x01"
@@ -255,12 +276,12 @@ class Writer(object):
 
     def int16(self, value):
         return chr((value & 0xFF00) >> 8) + \
-               chr((value & 0x00FF) >> 0)
+            chr((value & 0x00FF) >> 0)
 
     def int24(self, value):
         return chr((value & 0xFF0000) >> 16) + \
-               chr((value & 0x00FF00) >>  8) + \
-               chr((value & 0x0000FF) >>  0)
+            chr((value & 0x00FF00) >> 8) + \
+            chr((value & 0x0000FF) >> 0)
 
     def jid(self, user, server):
         buf = "\xFA"

@@ -22,9 +22,9 @@ HOST = "c.whatsapp.net"
 PORT = 443
 
 # Protocol settings
-PROTOCOL_DEVICE = "Android"
-PROTOCOL_VERSION = "2.11.378";
-PROTOCOL_USER_AGENT = "WhatsApp/2.11.378 Android/4.2 Device/GalaxyS3"
+PROTOCOL_DEVICE = "S40"
+PROTOCOL_VERSION = "2.12.68"
+PROTOCOL_USER_AGENT = "WhatsApp/2.12.68 S40Version/14.26 Device/Nokia302"
 
 # Other settings
 TIMEOUT = 0.1
@@ -33,19 +33,18 @@ ALIVE_INTERVAL = 30
 # Logger instance
 logger = logging.getLogger(__name__)
 
+
 class Client(object):
     SERVER = "s.whatsapp.net"
     GROUPHOST = "g.us"
 
-    def __init__(self, number, secret, nickname=None, auth_blob=None,
-        mcc_mnc=None):
+    def __init__(self, number, secret, nickname=None, auth_blob=None):
 
         self.number = number
         self.secret = secret
         self.nickname = nickname
 
         self.auth_blob = auth_blob
-        self.mcc_mnc = mcc_mnc
 
         self.auto_receipt = True
 
@@ -66,7 +65,7 @@ class Client(object):
 
         try:
             self.socket.connect((HOST, PORT))
-        except socket.error as e:
+        except socket.error:
             raise ConnectionError("Unable to connect to remote server")
 
     def _disconnect(self):
@@ -132,12 +131,12 @@ class Client(object):
                 node, plain = self.reader.read()
 
                 if self.debug:
-                    self.debug_out(utils.dump_bytes(plain, prefix="pln <<  ")
-                        + "\n")
+                    self.debug_out(
+                        utils.dump_bytes(plain, prefix="pln <<  ") + "\n")
 
                 if self.debug:
-                    self.debug_out(utils.dump_xml(node, prefix="xml <<  ")
-                        + "\n")
+                    self.debug_out(
+                        utils.dump_xml(node, prefix="xml <<  ") + "\n")
 
                 nodes.append(node)
             except MessageIncomplete:
@@ -151,7 +150,8 @@ class Client(object):
 
     def _challenge(self, node):
         encryption = Encryption(self.secret, node.data)
-        logger.debug("Session Keys: %s", [ key.encode("hex") for key in encryption.keys ])
+        logger.debug(
+            "Session Keys: %s", [key.encode("hex") for key in encryption.keys])
 
         self.writer.encrypt = encryption.encrypt
         self.reader.decrypt = encryption.decrypt
@@ -169,9 +169,9 @@ class Client(object):
 
         iq = node.children[0]
         if node["type"] == "get" and iq.name == "ping":
-            self._write(Node("iq", to=self.SERVER, id=node["id"], type="result"))
-        elif node["type"] == "result": # and iq.name == "query":
-            #self.messages.append(node)
+            self._write(
+                Node("iq", to=self.SERVER, id=node["id"], type="result"))
+        elif node["type"] == "result":
             pass
         else:
             logger.debug("Unknown iq message received: %s", node["type"])
@@ -182,8 +182,9 @@ class Client(object):
         for category in categories:
             nodes.append(Node("clean", type=category))
 
-        self._write(Node("iq", id=self._msgid("cleardirty"), type="set",
-            to=self.SERVER, xmlns="urn:xmpp:whatsapp:dirty", children=nodes))
+        self._write(Node(
+            "iq", id=self._msgid("cleardirty"), type="set", to=self.SERVER,
+            xmlns="urn:xmpp:whatsapp:dirty", children=nodes))
 
     def _ib(self, node):
         for child in node.children:
@@ -262,13 +263,15 @@ class Client(object):
         notify = Node("notify", xmlns="urn:xmpp:whatsapp", name=self.nickname)
         request = Node("request", xmlns="urn:xmpp:receipts")
 
-        message = Node("message", to=to, type="text", id=msgid,
-            t=utils.timestamp(), children=[x, notify, request, node])
+        message = Node(
+            "message", to=to, type="text", id=msgid, t=utils.timestamp(),
+            children=[x, notify, request, node])
 
         return msgid, message
 
     def _receipt(self, node):
-        self._write(Node("receipt", type="read", to=node["from"], id=node["id"],
+        self._write(Node(
+            "receipt", type="read", to=node["from"], id=node["id"],
             t=utils.timestamp()))
 
     def register_callback(self, *callbacks):
@@ -323,8 +326,8 @@ class Client(object):
 
         self._connect()
 
-        buf = self.writer.start_stream(self.SERVER, "%s-%s-%d" %
-            (PROTOCOL_DEVICE, PROTOCOL_VERSION, PORT))
+        buf = self.writer.start_stream(self.SERVER, "%s-%s-%d" % (
+            PROTOCOL_DEVICE, PROTOCOL_VERSION, PORT))
         self._write(buf)
 
         # Send features node
@@ -340,16 +343,15 @@ class Client(object):
 
         if self.auth_blob:
             encryption = AuthBlobEncryption(self.secret, self.auth_blob)
-            logger.debug("Session Keys (re-using auth challenge): %s",
-                [ key.encode("hex") for key in encryption.keys ])
+            logger.debug(
+                "Session Keys (re-using auth challenge): %s",
+                [key.encode("hex") for key in encryption.keys])
 
-            #self.writer.encrypt = encryption.encrypt
             self.reader.decrypt = encryption.decrypt
 
             # From WhatsAPI. It does not encrypt the data, but generates a MAC
             # based on the keys.
-            data = "%s%s%s%s MccMnc/%s" % (self.number, self.auth_blob,
-                utils.timestamp(), PROTOCOL_USER_AGENT, self.mcc_mnc)
+            data = "%s%s%s" % (self.number, self.auth_blob, utils.timestamp())
             auth.data = encryption.encrypt("", False) + data
 
         self._write(auth)
@@ -358,6 +360,10 @@ class Client(object):
             self.auth_blob = node.data
             self.account_info = node.attributes
 
+            if node["status"] == "expired":
+                self._disconnect()
+                raise LoginError("Account marked as expired.")
+
             self._write(Node("presence", name=self.nickname))
 
         def on_failure(node):
@@ -365,7 +371,8 @@ class Client(object):
             raise LoginError("Incorrect number and/or secret.")
 
         # Wait for either success, or failure
-        self.register_callback_and_wait(LoginSuccessCallback(on_success),
+        self.register_callback_and_wait(
+            LoginSuccessCallback(on_success),
             LoginFailedCallback(on_failure))
 
     def last_seen(self, number):
@@ -388,13 +395,16 @@ class Client(object):
         callback = Callback("iq", on_iq)
         self.register_callback_and_wait(callback)
 
-    def send_sync(self, numbers, mode="full", context="registration", index=0, last=True):
+    def send_sync(self, numbers, mode="full", context="registration", index=0,
+                  last=True):
         msgid = self._msgid("sync")
         sid = (int(time()) + 11644477200) * 10000000
 
-        sync = Node("sync", mode=mode, context=context, sid=str(sid), index=str(index),
+        sync = Node(
+            "sync", mode=mode, context=context, sid=str(sid), index=str(index),
             last="true" if last else "false")
-        node = Node("iq", to=self.number + "@" + self.SERVER, type="get", id=msgid,
+        node = Node(
+            "iq", to=self.number + "@" + self.SERVER, type="get", id=msgid,
             xmlns="urn:xmpp:whatsapp:sync")
         node.add(sync)
 
@@ -403,6 +413,13 @@ class Client(object):
             if number[0] != "+":
                 number = "+" + number
             sync.add(Node("user", data=number))
+
+        self._write(node)
+
+    def send_server_properties(self):
+        msgid = self._msgid("getproperties")
+        node = Node("iq", id=msgid, type="get", xmlns="w", to=self.SERVER)
+        node.add(Node("props"))
 
         self._write(node)
 
@@ -428,7 +445,7 @@ class Client(object):
         self._write(message)
         return msgid
 
-    def image(self, number, url, basename, size, thumbnail = None):
+    def image(self, number, url, basename, size, thumbnail=None):
         """
         Send an image to a contact.
 
@@ -441,21 +458,22 @@ class Client(object):
         # PNG thumbnails are apparently not supported
 
         media = Node("media", xmlns="urn:xmpp:whatsapp:mms", type="image",
-                     url=url, file=basename, size=size, data=thumbnail)
+                     url=url, file=basename, size=str(size), data=thumbnail)
         msgid, message = self._message(number, media)
         self._write(message)
         return msgid
 
     def audio(self, number, url, basename, size, attributes):
-        valid_attributes = ("abitrate", "acodec", "asampfmt", "asampfreq",
-            "duration", "encoding", "filehash", "mimetype")
+        valid_attributes = (
+            "abitrate", "acodec", "asampfmt", "asampfreq", "duration",
+            "encoding", "filehash", "mimetype")
 
         for name, value in attributes.iteritems:
             if name not in valid_attributes:
                 raise ValueError("Unknown audio attribute: %r" % name)
 
         media = Node("media", xmlns="urn:xmpp:whatsapp:mms", type="audio",
-                     url=url, file=basename, size=size, **attributes)
+                     url=url, file=basename, size=str(size), **attributes)
         msgid, message = self._message(number, media)
 
         self._write(message)
@@ -466,7 +484,8 @@ class Client(object):
         Send a location update to a contact.
         """
 
-        media = Node("media", xmlns="urn:xmpp:whatsapp:mms", type="location",
+        media = Node(
+            "media", xmlns="urn:xmpp:whatsapp:mms", type="location",
             latitude=latitude, longitude=longitude)
         msgid, message = self._message(number, media)
 
@@ -480,9 +499,10 @@ class Client(object):
         """
 
         vcard = Node("vcard", name=name, data=data)
-
-        media = Node("media", children=[vcard], xmlns="urn:xmpp:whatsapp:mms",
+        media = Node(
+            "media", children=[vcard], xmlns="urn:xmpp:whatsapp:mms",
             type="vcard", encoding="text")
+
         msgid, message = self._message(number, media)
 
         self._write(message)
