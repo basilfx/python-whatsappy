@@ -5,7 +5,7 @@ An unoffical Python API for connecting with the WhatsApp chat protocol.
 Clone this repository, and install it via `python setup.py install`.
 
 ## Usage
-The API is callback driven and easy to use. It interfaces with version 1.4 of
+The API is callback driven and easy to use. It interfaces with version 1.5 of
 the WhatsApp protocol. You should provide your own number and secret, which you
 can intercept from a real phone.
 
