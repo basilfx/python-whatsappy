@@ -27,8 +27,8 @@ PROTOCOL_VERSION = "2.12.89"
 PROTOCOL_USER_AGENT = "WhatsApp/2.12.89 S40Version/14.26 Device/Nokia302"
 
 # Other settings
-TIMEOUT = 0.1
-ALIVE_INTERVAL = 30
+TIMEOUT = 1
+ALIVE_INTERVAL = 20
 
 # Logger instance
 logger = logging.getLogger(__name__)
