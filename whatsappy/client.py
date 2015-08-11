@@ -23,8 +23,8 @@ PORT = 443
 
 # Protocol settings
 PROTOCOL_DEVICE = "S40"
-PROTOCOL_VERSION = "2.12.68"
-PROTOCOL_USER_AGENT = "WhatsApp/2.12.68 S40Version/14.26 Device/Nokia302"
+PROTOCOL_VERSION = "2.12.89"
+PROTOCOL_USER_AGENT = "WhatsApp/2.12.89 S40Version/14.26 Device/Nokia302"
 
 # Other settings
 TIMEOUT = 0.1
